@@ -106,7 +106,7 @@ export function UserProfile({
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-ink-3">
             <span className="flex items-center gap-1">
-              <Send className="h-3 w-3" /> @{user.telegram}
+              <Send className="h-3 w-3" /> {user.telegram}
             </span>
             <span className="flex items-center gap-1">
               <CalendarDays className="h-3 w-3" /> {date(user.createdAt)}

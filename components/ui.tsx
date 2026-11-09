@@ -617,7 +617,7 @@ export function Modal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-0 backdrop-blur-[4px] sm:items-center sm:p-6"
+          className="admin-theme fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-0 backdrop-blur-[4px] sm:items-center sm:p-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) onClose()
           }}
@@ -696,7 +696,7 @@ export function Drawer({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[4px]"
+          className="admin-theme fixed inset-0 z-[100] bg-black/40 backdrop-blur-[4px]"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) onClose()
           }}
@@ -1059,7 +1059,7 @@ const mountedToasts = (
 ) => {
   if (typeof document === 'undefined') return null
   return createPortal(
-    <div className="pointer-events-none fixed right-4 top-4 z-[200] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2">
+    <div className="admin-theme pointer-events-none fixed right-4 top-4 z-[200] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2">
       <AnimatePresence>
         {items.map((item) => (
           <motion.div

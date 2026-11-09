@@ -5,42 +5,43 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  Activity,
   Ban,
+  Check,
+  ChevronLeft,
+  ChevronRight,
   Coins,
   Download,
   Eye,
-  Filter,
+  Flame,
   Gem,
   MoreVertical,
-  Plus,
   SlidersHorizontal,
   Trash2,
+  UserPlus,
   UserRound,
   Users,
   X,
 } from 'lucide-react'
-import { PageHeader, PageTransition } from '@/components/layout/Page'
+import { PageTransition } from '@/components/layout/Page'
 import {
   Avatar,
-  Badge,
   Button,
   Checkbox,
   Drawer,
   Dropdown,
   EmptyState,
-  Input,
   Modal,
-  Pagination,
-  SearchInput,
-  Select,
   cn,
   useToast,
 } from '@/components/ui'
+import type { DropdownItem } from '@/components/ui'
 import { UserProfile } from '@/components/users/UserProfile'
 import { CoinsModal, GiveProModal } from '@/components/users/UserModals'
 import { useAppStore } from '@/lib/store'
 import { REGION_NAMES } from '@/lib/mock'
 import {
+  MOCK_NOW,
   date,
   dateInput,
   downloadCsv,
@@ -51,9 +52,96 @@ import {
 import type { User, UserStatus } from '@/lib/types'
 
 const PAGE_SIZE = 50
+const DAY = 86_400_000
 
 type StatusFilter = 'all' | UserStatus
 type PlanFilter = 'all' | 'free' | 'pro'
+
+const STATUS_TABS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: 'Barchasi' },
+  { value: 'active', label: 'Faol' },
+  { value: 'inactive', label: 'Nofaol' },
+  { value: 'blocked', label: 'Bloklangan' },
+]
+
+const statusDot: Record<UserStatus, string> = {
+  active: 'bg-success',
+  inactive: 'bg-ink-3/40',
+  blocked: 'bg-error',
+}
+
+const statusLabel: Record<UserStatus, string> = {
+  active: 'Faol',
+  inactive: 'Nofaol',
+  blocked: 'Bloklangan',
+}
+
+function StatTile({
+  label,
+  value,
+  hint,
+  icon,
+  dark = false,
+}: {
+  label: string
+  value: string
+  hint: string
+  icon: React.ReactNode
+  dark?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'relative overflow-hidden rounded-[16px] border p-3 sm:p-4',
+        dark ? 'border-ink bg-ink text-white' : 'border-line bg-white',
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p
+          className={cn(
+            'font-geist text-[9.5px] font-bold uppercase tracking-[0.09em] sm:text-[10px] sm:tracking-[0.12em]',
+            dark ? 'text-white/55' : 'text-ink-3',
+          )}
+        >
+          {label}
+        </p>
+        <span
+          className={cn(
+            'grid h-7 w-7 shrink-0 place-items-center rounded-[8px]',
+            dark ? 'bg-white/10 text-brand-light' : 'bg-muted text-ink-3',
+          )}
+        >
+          {icon}
+        </span>
+      </div>
+      <p className="mt-2 font-geist text-[21px] font-extrabold leading-none tracking-[-0.03em] tabular sm:text-[27px]">
+        {value}
+      </p>
+      <p
+        className={cn(
+          'mt-1.5 hidden truncate font-geist text-[11px] font-medium sm:block',
+          dark ? 'text-white/55' : 'text-ink-3',
+        )}
+      >
+        {hint}
+      </p>
+    </div>
+  )
+}
+
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block font-geist text-[10.5px] font-bold uppercase tracking-[0.1em] text-ink-3">
+        {label}
+      </span>
+      {children}
+    </label>
+  )
+}
+
+const fieldClass =
+  'h-11 w-full rounded-[10px] border border-line bg-white px-3 font-geist text-[13.5px] font-medium text-ink outline-none transition hover:border-line-brand focus:border-brand focus:ring-4 focus:ring-brand/10'
 
 export default function UsersPage() {
   const router = useRouter()
@@ -82,6 +170,15 @@ export default function UsersPage() {
   const [coinsTargets, setCoinsTargets] = useState<User[] | null>(null)
   const [deleteIds, setDeleteIds] = useState<string[]>([])
 
+  const totals = useMemo(() => {
+    const active = users.filter((user) => user.status === 'active').length
+    const pro = users.filter((user) => user.plan === 'pro').length
+    const newWeek = users.filter(
+      (user) => new Date(user.createdAt).getTime() >= MOCK_NOW.getTime() - 7 * DAY,
+    ).length
+    return { all: users.length, active, pro, newWeek }
+  }, [users])
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
     return users.filter((user) => {
@@ -106,14 +203,12 @@ export default function UsersPage() {
     [filtered, currentPage],
   )
 
-  const activeFilterCount =
-    (status !== 'all' ? 1 : 0) +
+  const advancedFilterCount =
     (plan !== 'all' ? 1 : 0) +
     (region !== 'all' ? 1 : 0) +
     (level !== 'all' ? 1 : 0) +
     (from ? 1 : 0) +
-    (to ? 1 : 0) +
-    (search ? 1 : 0)
+    (to ? 1 : 0)
 
   const allPageSelected = rows.length > 0 && rows.every((row) => selected.has(row.id))
   const somePageSelected = rows.some((row) => selected.has(row.id)) && !allPageSelected
@@ -121,9 +216,28 @@ export default function UsersPage() {
   const selectedUsers = useMemo(() => users.filter((user) => selected.has(user.id)), [users, selected])
   const drawerUser = users.find((user) => user.id === drawerId) ?? null
 
+  const activeChips: Array<{ key: string; label: string; clear: () => void }> = []
+  if (plan !== 'all') {
+    activeChips.push({
+      key: 'plan',
+      label: plan === 'pro' ? 'Pro obuna' : 'Bepul obuna',
+      clear: () => setPlan('all'),
+    })
+  }
+  if (region !== 'all') {
+    activeChips.push({ key: 'region', label: region, clear: () => setRegion('all') })
+  }
+  if (level !== 'all') {
+    activeChips.push({ key: 'level', label: `Lv.${level}`, clear: () => setLevel('all') })
+  }
+  if (from) {
+    activeChips.push({ key: 'from', label: `dan ${from}`, clear: () => setFrom('') })
+  }
+  if (to) {
+    activeChips.push({ key: 'to', label: `gacha ${to}`, clear: () => setTo('') })
+  }
+
   const resetFilters = () => {
-    setSearch('')
-    setStatus('all')
     setPlan('all')
     setRegion('all')
     setLevel('all')
@@ -158,7 +272,7 @@ export default function UsersPage() {
         user.name,
         `@${user.username}`,
         user.email,
-        `@${user.telegram}`,
+        user.telegram,
         user.plan === 'pro' ? 'Pro' : 'Bepul',
         user.xp,
         user.level,
@@ -178,7 +292,11 @@ export default function UsersPage() {
       toast({ title: `${user.name} blokdan chiqarildi`, tone: 'success' })
     } else {
       setUserStatus([user.id], 'blocked')
-      toast({ title: `${user.name} bloklandi`, description: "Foydalanuvchi ilovaga kira olmaydi.", tone: 'warning' })
+      toast({
+        title: `${user.name} bloklandi`,
+        description: 'Foydalanuvchi ilovaga kira olmaydi.',
+        tone: 'warning',
+      })
     }
   }
 
@@ -196,451 +314,774 @@ export default function UsersPage() {
   }
 
   const levelOptions = Array.from({ length: 7 }, (_, index) => String(index + 1))
+  const fromRow = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const toRow = Math.min(filtered.length, currentPage * PAGE_SIZE)
+
+  const rowActions = (user: User): DropdownItem[] => [
+    {
+      label: 'Profilni ochish',
+      icon: <UserRound className="h-3.5 w-3.5" />,
+      onClick: () => setDrawerId(user.id),
+    },
+    {
+      label: "To'liq sahifa",
+      icon: <Eye className="h-3.5 w-3.5" />,
+      onClick: () => router.push(`/admin/users/${user.id}`),
+    },
+    {
+      label: 'Pro berish',
+      icon: <Gem className="h-3.5 w-3.5" />,
+      onClick: () => {
+        setProTargets([user])
+        setProOpen(true)
+      },
+    },
+    {
+      label: "Coin qo'shish",
+      icon: <Coins className="h-3.5 w-3.5" />,
+      onClick: () => {
+        setCoinsTargets([user])
+        setCoinsOpen(true)
+      },
+    },
+    {
+      label: user.status === 'blocked' ? 'Blokdan chiqarish' : 'Bloklash',
+      icon: <Ban className="h-3.5 w-3.5" />,
+      onClick: () => toggleBlock(user),
+    },
+    { separator: true, label: 'sep' },
+    {
+      label: "O'chirish",
+      danger: true,
+      icon: <Trash2 className="h-3.5 w-3.5" />,
+      onClick: () => setDeleteIds([user.id]),
+    },
+  ]
 
   return (
     <PageTransition>
-      <PageHeader
-        title={
-          <span className="flex flex-wrap items-center gap-2.5">
-            Foydalanuvchilar
-            <Badge tone="brand">{number(users.length)} ta</Badge>
-          </span>
-        }
-        subtitle="Foydalanuvchilarni boshqaring, filtrlang va obunalarini nazorat qiling"
-        breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Foydalanuvchilar' }]}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setFiltersOpen((current) => !current)}>
-              <Filter className="h-4 w-4" /> Filter
-              {activeFilterCount > 0 ? (
-                <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </Button>
-            <Button variant="secondary" onClick={() => exportRows(filtered)}>
-              <Download className="h-4 w-4" /> Export CSV
-            </Button>
-            <Button
+      <div className="flex h-[calc(100dvh-177px)] flex-col gap-3 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)]">
+        <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <span className="inline-flex items-center gap-2 font-geist text-[10.5px] font-bold uppercase tracking-[0.16em] text-ink-3">
+              <span className="h-px w-6 bg-brand" />
+              HDP Academy · Foydalanuvchilar
+            </span>
+            <div className="mt-1.5 flex items-center gap-2.5">
+              <h1 className="font-geist text-[29px] font-extrabold leading-none tracking-[-0.035em] text-ink sm:text-[36px]">
+                Foydalanuvchilar
+              </h1>
+              <span className="rounded-full bg-muted px-2.5 py-1 font-geist text-[11px] font-bold tabular text-ink-2">
+                {number(totals.all)}
+              </span>
+            </div>
+            <p className="mt-1.5 hidden text-[13px] text-ink-3 sm:block">
+              Bazani filtrlang, obunalarni boshqaring va ommaviy amallarni bajaring.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => exportRows(filtered)}
+              aria-label="CSV eksport"
+              className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-line bg-white px-3.5 font-geist text-[13px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-4"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setProTargets(null)
                 setProOpen(true)
               }}
+              className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-ink px-3.5 font-geist text-[13px] font-bold text-white transition hover:bg-brand sm:px-4"
             >
-              <Plus className="h-4 w-4" /> Qo'lda Pro berish
-            </Button>
-          </>
-        }
-      />
+              <Gem className="h-4 w-4" />
+              <span className="hidden sm:inline">Pro berish</span>
+              <span className="sm:hidden">Pro</span>
+            </button>
+          </div>
+        </header>
 
-      <div className="mb-4">
-        <SearchInput
-          value={search}
-          onChange={(value) => {
-            setSearch(value)
-            setPage(1)
-          }}
-          placeholder="Ism, email, username yoki #ID bo'yicha qidirish..."
-          className="sm:max-w-md"
-        />
-      </div>
+        <section className="grid shrink-0 grid-cols-2 gap-2.5 [@media(max-height:720px)]:hidden lg:grid-cols-4">
+          <StatTile
+            label="Jami o'quvchilar"
+            value={number(totals.all)}
+            hint={`${number(totals.all - totals.active)} ta nofaol yoki bloklangan`}
+            icon={<Users className="h-[15px] w-[15px]" />}
+          />
+          <StatTile
+            label="Faol"
+            value={number(totals.active)}
+            hint={`${percent((totals.active / Math.max(1, totals.all)) * 100, 1)} baza`}
+            icon={<Activity className="h-[15px] w-[15px]" />}
+          />
+          <StatTile
+            dark
+            label="Pro obuna"
+            value={number(totals.pro)}
+            hint={`${percent((totals.pro / Math.max(1, totals.all)) * 100, 1)} foydalanuvchi`}
+            icon={<Gem className="h-[15px] w-[15px]" />}
+          />
+          <StatTile
+            label="Yangi · 7 kun"
+            value={number(totals.newWeek)}
+            hint="So'nggi haftada qo'shildi"
+            icon={<UserPlus className="h-[15px] w-[15px]" />}
+          />
+        </section>
 
-      <AnimatePresence initial={false}>
-        {filtersOpen ? (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="overflow-hidden"
-          >
-            <div className="mb-4 rounded-xl border border-line bg-white p-4 shadow-card">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
-                  <SlidersHorizontal className="h-4 w-4 text-brand" /> Kengaytirilgan filtr
-                </p>
+        <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-line bg-white">
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-line px-3 py-2.5 sm:px-4">
+            <div className="relative min-w-0 flex-1 sm:w-[320px] sm:flex-none">
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="pointer-events-none absolute left-3.5 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-placeholder"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+              </svg>
+              <input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value)
+                  setPage(1)
+                }}
+                placeholder="Ism, email, username yoki #ID..."
+                className="h-11 w-full rounded-[12px] border border-line bg-white pl-10 pr-9 font-geist text-[13.5px] text-ink outline-none transition placeholder:text-placeholder hover:border-line-brand focus:border-brand focus:ring-4 focus:ring-brand/10"
+              />
+              {search ? (
                 <button
                   type="button"
-                  onClick={resetFilters}
-                  className="text-[12px] font-semibold text-brand-text hover:underline"
+                  aria-label="Qidiruvni tozalash"
+                  onClick={() => {
+                    setSearch('')
+                    setPage(1)
+                  }}
+                  className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-[8px] text-ink-3 hover:bg-muted hover:text-ink"
                 >
-                  Filterni tozalash
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">Status</p>
-                  <Select
-                    value={status}
-                    onChange={(event) => {
-                      setStatus(event.target.value as StatusFilter)
-                      setPage(1)
-                    }}
-                  >
-                    <option value="all">Barchasi</option>
-                    <option value="active">Faol</option>
-                    <option value="inactive">Nofaol</option>
-                    <option value="blocked">Bloklangan</option>
-                  </Select>
-                </div>
-                <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">Obuna</p>
-                  <Select
-                    value={plan}
-                    onChange={(event) => {
-                      setPlan(event.target.value as PlanFilter)
-                      setPage(1)
-                    }}
-                  >
-                    <option value="all">Barchasi</option>
-                    <option value="free">Bepul</option>
-                    <option value="pro">Pro</option>
-                  </Select>
-                </div>
-                <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">Viloyat</p>
-                  <Select
-                    value={region}
-                    onChange={(event) => {
-                      setRegion(event.target.value)
-                      setPage(1)
-                    }}
-                  >
-                    <option value="all">Barchasi</option>
-                    {REGION_NAMES.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">Daraja</p>
-                  <Select
-                    value={level}
-                    onChange={(event) => {
-                      setLevel(event.target.value)
-                      setPage(1)
-                    }}
-                  >
-                    <option value="all">Barchasi</option>
-                    {levelOptions.map((value) => (
-                      <option key={value} value={value}>
-                        Lv.{value}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">Ro'yxat sanasi (dan)</p>
-                  <Input
-                    type="date"
-                    value={from}
-                    onChange={(event) => {
-                      setFrom(event.target.value)
-                      setPage(1)
-                    }}
-                  />
-                </div>
-                <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">Ro'yxat sanasi (gacha)</p>
-                  <Input
-                    type="date"
-                    value={to}
-                    onChange={(event) => {
-                      setTo(event.target.value)
-                      setPage(1)
-                    }}
-                  />
-                </div>
-              </div>
+              ) : null}
             </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
 
-      <AnimatePresence>
-        {selected.size > 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line-brand bg-brand-soft px-3 py-2.5"
-          >
-            <span className="mr-1 text-[12.5px] font-semibold text-brand-text">{selected.size} ta tanlandi</span>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setProTargets(selectedUsers)
-                setProOpen(true)
-              }}
-            >
-              <Gem className="h-3.5 w-3.5" /> Pro berish
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setCoinsTargets(selectedUsers)
-                setCoinsOpen(true)
-              }}
-            >
-              <Coins className="h-3.5 w-3.5" /> Coin qo'shish
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => exportRows(selectedUsers, 'tanlangan')}>
-              <Download className="h-3.5 w-3.5" /> Export
-            </Button>
-            <Button size="sm" variant="destructive" onClick={bulkBlock}>
-              <Ban className="h-3.5 w-3.5" /> Bloklash
-            </Button>
+            <div className="no-scrollbar order-3 flex h-11 w-full items-center gap-0.5 overflow-x-auto rounded-[12px] bg-muted p-0.5 sm:order-none sm:w-auto sm:p-1">
+              {STATUS_TABS.map((tab) => {
+                const active = tab.value === status
+                const count =
+                  tab.value === 'all'
+                    ? totals.all
+                    : users.filter((user) => user.status === tab.value).length
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => {
+                      setStatus(tab.value)
+                      setPage(1)
+                    }}
+                    className={cn(
+                      'inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-[9px] px-3 font-geist text-[12px] font-semibold transition sm:h-9',
+                      active ? 'bg-ink text-white shadow-sm' : 'text-ink-3 hover:text-ink',
+                    )}
+                  >
+                    {tab.label}
+                    <span
+                      className={cn(
+                        'hidden rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular sm:inline-block',
+                        active ? 'bg-white/15 text-white/80' : 'bg-white/80 text-ink-3',
+                      )}
+                    >
+                      {number(count)}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
             <button
               type="button"
-              onClick={() => setSelected(new Set())}
-              className="ml-auto grid h-7 w-7 place-items-center rounded-md text-brand-text hover:bg-white"
-              aria-label="Tanlovni tozalash"
+              onClick={() => setFiltersOpen(true)}
+              aria-label="Kengaytirilgan filtr"
+              className={cn(
+                'ml-auto inline-flex h-11 w-11 items-center justify-center gap-2 rounded-[12px] border font-geist text-[13px] font-semibold transition sm:w-auto sm:px-3.5',
+                advancedFilterCount > 0
+                  ? 'border-brand/40 bg-brand-soft text-brand-text'
+                  : 'border-line bg-white text-ink-2 hover:border-line-brand hover:text-ink',
+              )}
             >
-              <X className="h-4 w-4" />
+              <SlidersHorizontal className="h-4 w-4" />
+              <span className="hidden md:inline">Filtr</span>
+              {advancedFilterCount > 0 ? (
+                <span className="hidden h-4.5 min-w-[18px] place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-white sm:grid">
+                  {advancedFilterCount}
+                </span>
+              ) : null}
             </button>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+          </div>
 
-      <div className="overflow-hidden rounded-xl border border-line bg-white shadow-card">
-        {filtered.length === 0 ? (
-          <EmptyState
-            title="Foydalanuvchi topilmadi"
-            text="Qidiruv yoki filtrlarni o'zgartirib qayta urinib ko'ring."
-            icon={<Users className="h-5 w-5" />}
-            action={
-              <Button variant="secondary" size="sm" onClick={resetFilters}>
-                Filterni tozalash
-              </Button>
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left">
-              <thead>
-                <tr className="border-b border-line bg-canvas text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">
-                  <th className="w-10 px-3 py-2.5">
-                    <Checkbox checked={allPageSelected} indeterminate={somePageSelected} onChange={togglePage} />
+          {activeChips.length > 0 ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-line-2 px-3 py-2 sm:px-4">
+              {activeChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => {
+                    chip.clear()
+                    setPage(1)
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-2.5 py-1 font-geist text-[11.5px] font-semibold text-ink-2 transition hover:border-error/30 hover:text-error"
+                >
+                  {chip.label}
+                  <X className="h-3 w-3" />
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  resetFilters()
+                  setPage(1)
+                }}
+                className="ml-1 font-geist text-[11.5px] font-semibold text-brand-text hover:underline"
+              >
+                Tozalash
+              </button>
+            </div>
+          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-auto">
+            <div className="lg:hidden">
+              {rows.map((user) => {
+                const checked = selected.has(user.id)
+                return (
+                  <div
+                    key={user.id}
+                    className={cn(
+                      'flex items-center gap-0.5 border-b border-line-2 pr-1 transition last:border-0',
+                      checked ? 'bg-brand-soft/45' : 'active:bg-muted/70',
+                    )}
+                  >
+                    <div className="py-3 pl-3" onClick={(event) => event.stopPropagation()}>
+                      <Checkbox checked={checked} onChange={() => toggleSelect(user.id)} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerId(user.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 py-2.5 pl-1 pr-1 text-left"
+                    >
+                      <Avatar name={user.name} tone={user.tone} size="sm" verified={user.verified} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-geist text-[13px] font-semibold text-ink">
+                            {user.name}
+                          </span>
+                          {user.plan === 'pro' ? (
+                            <span className="shrink-0 rounded-full bg-brand-soft px-1.5 py-px font-geist text-[9px] font-bold uppercase tracking-wide text-brand-text">
+                              Pro
+                            </span>
+                          ) : null}
+                          {user.status === 'blocked' ? (
+                            <span className="shrink-0 rounded-full bg-error-bg px-1.5 py-px font-geist text-[9px] font-bold uppercase tracking-wide text-error">
+                              Blok
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1 font-geist text-[10.5px] text-ink-3">
+                          <span className="max-w-[92px] truncate">@{user.username}</span>
+                          <span>·</span>
+                          <span className={cn('h-1.5 w-1.5 rounded-full', statusDot[user.status])} />
+                          <span className="truncate">
+                            {user.status === 'active' ? relative(user.lastSeenAt) : statusLabel[user.status]}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-geist text-[12px] font-semibold tabular text-ink">
+                          {number(user.xp)} XP
+                        </p>
+                        <p className="mt-0.5 font-geist text-[10px] font-medium tabular text-ink-3">
+                          Lv.{user.level} · {number(user.coins)} coin
+                        </p>
+                      </div>
+                    </button>
+                    <Dropdown
+                      trigger={
+                        <button
+                          type="button"
+                          aria-label="Amallar"
+                          className="grid h-11 w-11 place-items-center rounded-[9px] text-ink-3 active:bg-muted"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      }
+                      items={rowActions(user)}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+
+            <table className="hidden w-full min-w-[880px] border-collapse text-left lg:table">
+              <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
+                <tr className="border-b border-line font-geist text-[10px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                  <th className="w-11 py-3 pl-4 pr-1">
+                    <Checkbox
+                      checked={allPageSelected}
+                      indeterminate={somePageSelected}
+                      onChange={togglePage}
+                    />
                   </th>
-                  <th className="px-3 py-2.5">Foydalanuvchi</th>
-                  <th className="px-3 py-2.5">Telegram</th>
-                  <th className="px-3 py-2.5">Obuna</th>
-                  <th className="px-3 py-2.5">XP / Daraja</th>
-                  <th className="px-3 py-2.5">Coin</th>
-                  <th className="px-3 py-2.5">Streak</th>
-                  <th className="px-3 py-2.5">Ro'yxat</th>
-                  <th className="w-24 px-3 py-2.5 text-right">Amallar</th>
+                  <th className="px-2 py-3 font-semibold">Foydalanuvchi</th>
+                  <th className="px-3 py-3 font-semibold">Viloyat</th>
+                  <th className="px-3 py-3 font-semibold">Obuna</th>
+                  <th className="px-3 py-3 font-semibold">Faollik</th>
+                  <th className="px-3 py-3 text-right font-semibold">XP / Daraja</th>
+                  <th className="px-3 py-3 text-right font-semibold">Coin</th>
+                  <th className="px-3 py-3 text-right font-semibold">Streak</th>
+                  <th className="w-12 py-3 pl-1 pr-4" />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((user) => {
                   const checked = selected.has(user.id)
+                  const progress = Math.max(
+                    0,
+                    Math.min(100, ((user.xp - user.level * 800) / 900) * 100),
+                  )
                   return (
                     <tr
                       key={user.id}
+                      onClick={() => setDrawerId(user.id)}
                       className={cn(
-                        'border-b border-line-2 text-[12.5px] transition last:border-0',
-                        checked ? 'bg-brand-soft/50' : 'hover:bg-canvas',
+                        'cursor-pointer border-b border-line-2 transition last:border-0',
+                        checked ? 'bg-brand-soft/45' : 'hover:bg-muted/70',
                       )}
                     >
-                      <td className="px-3 py-2">
+                      <td className="py-2.5 pl-4 pr-1" onClick={(event) => event.stopPropagation()}>
                         <Checkbox checked={checked} onChange={() => toggleSelect(user.id)} />
                       </td>
-                      <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setDrawerId(user.id)}
-                          className="flex items-center gap-2.5 text-left"
-                        >
-                          <Avatar name={user.name} tone={user.tone} size="sm" verified={user.verified} />
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-1.5">
-                              <span className="max-w-[160px] truncate font-semibold text-ink">{user.name}</span>
-                              {user.status === 'blocked' ? <Badge tone="danger">Blok</Badge> : null}
+                      <td className="px-2 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar
+                            name={user.name}
+                            tone={user.tone}
+                            size="sm"
+                            verified={user.verified}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="max-w-[190px] truncate font-geist text-[13px] font-semibold text-ink">
+                                {user.name}
+                              </span>
+                              {user.status === 'blocked' ? (
+                                <span className="rounded-full bg-error-bg px-1.5 py-px font-geist text-[9.5px] font-bold uppercase tracking-wide text-error">
+                                  Blok
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="mt-0.5 block max-w-[200px] truncate font-mono text-[10.5px] text-ink-3">
+                              @{user.username}
                             </span>
-                            <span className="block font-mono text-[10px] text-ink-3">#{user.id}</span>
-                          </span>
-                        </button>
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-3 py-2 text-ink-2">@{user.telegram}</td>
-                      <td className="px-3 py-2">
-                        {user.plan === 'pro' ? (
-                          <Badge tone="brand">PRO</Badge>
-                        ) : (
-                          <Badge tone="gray">BEPUL</Badge>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-ink-2">
-                        <span className="tabular">{number(user.xp)} XP</span>
-                        <span className="ml-1 text-ink-3">· Lv.{user.level}</span>
-                      </td>
-                      <td className="px-3 py-2 font-semibold tabular text-[#b45309]">{number(user.coins)}</td>
-                      <td className="px-3 py-2">
-                        <span className="inline-flex items-center gap-1 text-ink-2">
-                          <span className="text-[11px]">🔥</span> {user.streak} kun
+                      <td className="px-3 py-2.5">
+                        <span className="block max-w-[130px] truncate font-geist text-[12.5px] font-medium text-ink-2">
+                          {user.region}
+                        </span>
+                        <span className="mt-0.5 block font-geist text-[10.5px] text-ink-3">
+                          {user.grade}-sinf
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-ink-3">{date(user.createdAt)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center justify-end gap-0.5">
-                          <button
-                            type="button"
-                            aria-label="Profilni ko'rish"
-                            onClick={() => setDrawerId(user.id)}
-                            className="grid h-7 w-7 place-items-center rounded-md text-ink-3 hover:bg-hover hover:text-brand-text"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-                          <Dropdown
-                            trigger={
-                              <button
-                                type="button"
-                                aria-label="Amallar"
-                                className="grid h-7 w-7 place-items-center rounded-md text-ink-3 hover:bg-hover hover:text-ink"
-                              >
-                                <MoreVertical className="h-3.5 w-3.5" />
-                              </button>
-                            }
-                            items={[
-                              {
-                                label: 'Profilni ochish',
-                                icon: <UserRound className="h-3.5 w-3.5" />,
-                                onClick: () => setDrawerId(user.id),
-                              },
-                              {
-                                label: 'To\'liq sahifa',
-                                icon: <Eye className="h-3.5 w-3.5" />,
-                                onClick: () => router.push(`/admin/users/${user.id}`),
-                              },
-                              {
-                                label: user.plan === 'pro' ? 'Pro obunani olish' : 'Pro berish',
-                                icon: <Gem className="h-3.5 w-3.5" />,
-                                onClick: () => {
-                                  setProTargets([user])
-                                  setProOpen(true)
-                                },
-                              },
-                              {
-                                label: "Coin qo'shish",
-                                icon: <Coins className="h-3.5 w-3.5" />,
-                                onClick: () => {
-                                  setCoinsTargets([user])
-                                  setCoinsOpen(true)
-                                },
-                              },
-                              {
-                                label: user.status === 'blocked' ? 'Blokdan chiqarish' : 'Bloklash',
-                                icon: <Ban className="h-3.5 w-3.5" />,
-                                onClick: () => toggleBlock(user),
-                              },
-                              { separator: true, label: 'sep' },
-                              {
-                                label: "O'chirish",
-                                danger: true,
-                                icon: <Trash2 className="h-3.5 w-3.5" />,
-                                onClick: () => setDeleteIds([user.id]),
-                              },
-                            ]}
-                          />
+                      <td className="px-3 py-2.5">
+                        {user.plan === 'pro' ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-1 font-geist text-[10px] font-bold uppercase tracking-[0.06em] text-brand-text">
+                            <Gem className="h-3 w-3" />
+                            Pro
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-muted px-2 py-1 font-geist text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">
+                            Bepul
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="flex items-center gap-1.5 whitespace-nowrap font-geist text-[12px] font-medium text-ink-2">
+                          <span className={cn('h-1.5 w-1.5 rounded-full', statusDot[user.status])} />
+                          {user.status === 'active'
+                            ? relative(user.lastSeenAt)
+                            : statusLabel[user.status]}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-col items-end">
+                          <span className="font-geist text-[12.5px] font-semibold tabular text-ink">
+                            {number(user.xp)}
+                          </span>
+                          <span className="mt-1 flex items-center gap-1.5">
+                            <span className="h-1 w-12 overflow-hidden rounded-full bg-muted">
+                              <span
+                                className="block h-full rounded-full bg-brand"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </span>
+                            <span className="font-geist text-[10px] font-medium text-ink-3">
+                              Lv.{user.level}
+                            </span>
+                          </span>
                         </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className="inline-flex items-center gap-1 font-geist text-[12.5px] font-semibold tabular text-[#b45309]">
+                          <Coins className="h-3.5 w-3.5" />
+                          {number(user.coins)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {user.streak > 0 ? (
+                          <span className="inline-flex items-center gap-1 font-geist text-[12px] font-medium tabular text-ink-2">
+                            <Flame className="h-3.5 w-3.5 text-brand" />
+                            {user.streak}
+                          </span>
+                        ) : (
+                          <span className="font-geist text-[12px] text-ink-3">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pl-1 pr-4 text-right" onClick={(event) => event.stopPropagation()}>
+                        <Dropdown
+                          trigger={
+                            <button
+                              type="button"
+                              aria-label="Amallar"
+                              className="grid h-9 w-9 place-items-center rounded-[9px] text-ink-3 transition hover:bg-muted hover:text-ink"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          }
+                          items={rowActions(user)}
+                        />
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-          </div>
-        )}
-        {filtered.length > 0 ? (
-          <div className="border-t border-line px-4 py-3">
-            <Pagination
-              page={currentPage}
-              pageCount={pageCount}
-              onChange={setPage}
-              total={filtered.length}
-              pageSize={PAGE_SIZE}
-            />
-          </div>
-        ) : null}
-      </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-3">
-        <span>
-          Jami {number(users.length)} ta foydalanuvchi · {number(users.filter((user) => user.plan === 'pro').length)}{' '}
-          Pro ({percent((users.filter((user) => user.plan === 'pro').length / Math.max(1, users.length)) * 100, 1)})
-        </span>
-        <span>Oxirgi sinxronlash: {relative(new Date())}</span>
-      </div>
+            {filtered.length === 0 ? (
+              <div className="grid h-full min-h-[220px] place-items-center px-4">
+                <EmptyState
+                  title="Foydalanuvchi topilmadi"
+                  text="Qidiruv yoki filtrlarni o'zgartirib qayta urinib ko'ring."
+                  icon={<Users className="h-5 w-5" />}
+                  action={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setSearch('')
+                        setStatus('all')
+                        resetFilters()
+                      }}
+                    >
+                      Filtrni tozalash
+                    </Button>
+                  }
+                />
+              </div>
+            ) : null}
+          </div>
 
-      <Drawer
-        open={Boolean(drawerUser)}
-        onClose={() => setDrawerId(null)}
-        title="Foydalanuvchi profili"
-        subtitle={drawerUser ? `#${drawerUser.id}` : undefined}
-        footer={
-          drawerUser ? (
-            <div className="flex items-center justify-between gap-2">
-              <Link
-                href={`/admin/users/${drawerUser.id}`}
-                className="text-[12px] font-semibold text-brand-text hover:underline"
+          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2 sm:px-4">
+            <p className="font-geist text-[11.5px] text-ink-3">
+              <span className="font-semibold text-ink-2">
+                {number(fromRow)}–{number(toRow)}
+              </span>{' '}
+              / {number(filtered.length)} yozuv
+              {filtered.length !== users.length ? ' (filtrlangan)' : ''}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                aria-label="Oldingi sahifa"
+                className="grid h-10 w-10 place-items-center rounded-[10px] border border-line text-ink-2 transition hover:border-line-brand hover:bg-muted disabled:opacity-40 disabled:hover:bg-white"
               >
-                To'liq profil →
-              </Link>
-              <Button size="sm" variant="secondary" onClick={() => setDrawerId(null)}>
-                Yopish
-              </Button>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[74px] text-center font-geist text-[12px] font-semibold tabular text-ink-2">
+                {number(currentPage)} / {number(pageCount)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                disabled={currentPage >= pageCount}
+                aria-label="Keyingi sahifa"
+                className="grid h-10 w-10 place-items-center rounded-[10px] border border-line text-ink-2 transition hover:border-line-brand hover:bg-muted disabled:opacity-40 disabled:hover:bg-white"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
-          ) : undefined
-        }
-      >
-        {drawerUser ? (
-          <UserProfile
-            user={drawerUser}
-            transactions={transactions}
-            olympiads={olympiads}
-            onGivePro={(user) => {
-              setProTargets([user])
-              setProOpen(true)
-            }}
-            onGiveCoins={(user) => {
-              setCoinsTargets([user])
-              setCoinsOpen(true)
-            }}
-            onToggleBlock={toggleBlock}
-          />
-        ) : null}
-      </Drawer>
+          </footer>
 
-      <GiveProModal open={proOpen} onClose={() => setProOpen(false)} targets={proTargets} />
-      <CoinsModal open={coinsOpen} onClose={() => setCoinsOpen(false)} targets={coinsTargets} />
+          <AnimatePresence>
+            {selected.size > 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                className="absolute bottom-[62px] left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-[14px] bg-ink p-1 pl-3 text-white shadow-[0_18px_44px_rgba(25,24,19,0.35)]"
+              >
+                <span className="mr-1 whitespace-nowrap font-geist text-[11.5px] font-bold">
+                  {number(selected.size)} tanlandi
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProTargets(selectedUsers)
+                    setProOpen(true)
+                  }}
+                  aria-label="Pro obuna berish"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-[9px] px-2.5 font-geist text-[11.5px] font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:h-9"
+                >
+                  <Gem className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Pro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCoinsTargets(selectedUsers)
+                    setCoinsOpen(true)
+                  }}
+                  aria-label="Coin qo'shish"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-[9px] px-2.5 font-geist text-[11.5px] font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:h-9"
+                >
+                  <Coins className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Coin</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportRows(selectedUsers, 'tanlangan')}
+                  aria-label="Tanlanganlarni eksport qilish"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-[9px] px-2.5 font-geist text-[11.5px] font-semibold text-white/85 transition hover:bg-white/10 hover:text-white sm:h-9"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Export</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={bulkBlock}
+                  aria-label="Tanlanganlarni bloklash"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-[9px] px-2.5 font-geist text-[11.5px] font-semibold text-error transition hover:bg-white/10 sm:h-9"
+                >
+                  <Ban className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Bloklash</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  aria-label="Tanlovni tozalash"
+                  className="grid h-11 w-11 place-items-center rounded-[9px] text-white/60 transition hover:bg-white/10 hover:text-white sm:h-9 sm:w-9"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </section>
 
-      <Modal
-        open={deleteIds.length > 0}
-        onClose={() => setDeleteIds([])}
-        title="Foydalanuvchini o'chirish"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDeleteIds([])}>
-              Bekor qilish
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              <Trash2 className="h-4 w-4" /> O'chirish
-            </Button>
-          </>
-        }
-      >
-        <p className="text-[13px] text-ink-2">
-          {deleteIds.length} ta foydalanuvchi butunlay o'chiriladi. Bu amalni ortga qaytarish mumkin emas.
-        </p>
-        <div className="mt-3 rounded-lg bg-error-bg px-3 py-2 text-[12px] text-error">
-          Tegishli to'lovlar va natijalar arxivda saqlanadi, ammo foydalanuvchi ilovaga kira olmaydi.
-        </div>
-      </Modal>
+        <Drawer
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          title="Kengaytirilgan filtr"
+          subtitle="Natijalarni aniq segmentga moslang"
+          widthClass="sm:w-[400px]"
+          footer={
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  resetFilters()
+                  setFiltersOpen(false)
+                }}
+              >
+                Tozalash
+              </Button>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-ink px-5 font-geist text-[13px] font-bold text-white transition hover:bg-brand"
+              >
+                <Check className="h-4 w-4" />
+                Qo'llash
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <FilterField label="Obuna">
+              <select
+                value={plan}
+                onChange={(event) => {
+                  setPlan(event.target.value as PlanFilter)
+                  setPage(1)
+                }}
+                className={fieldClass}
+              >
+                <option value="all">Barchasi</option>
+                <option value="free">Bepul</option>
+                <option value="pro">Pro</option>
+              </select>
+            </FilterField>
+            <FilterField label="Viloyat">
+              <select
+                value={region}
+                onChange={(event) => {
+                  setRegion(event.target.value)
+                  setPage(1)
+                }}
+                className={fieldClass}
+              >
+                <option value="all">Barchasi</option>
+                {REGION_NAMES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label="Daraja">
+              <select
+                value={level}
+                onChange={(event) => {
+                  setLevel(event.target.value)
+                  setPage(1)
+                }}
+                className={fieldClass}
+              >
+                <option value="all">Barchasi</option>
+                {levelOptions.map((value) => (
+                  <option key={value} value={value}>
+                    Lv.{value}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <div className="border-t border-line-2 pt-4">
+              <p className="mb-2 font-geist text-[10.5px] font-bold uppercase tracking-[0.1em] text-ink-3">
+                Ro'yxat sanasi
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                <FilterField label="Dan">
+                  <input
+                    type="date"
+                    value={from}
+                    onChange={(event) => {
+                      setFrom(event.target.value)
+                      setPage(1)
+                    }}
+                    className={fieldClass}
+                  />
+                </FilterField>
+                <FilterField label="Gacha">
+                  <input
+                    type="date"
+                    value={to}
+                    onChange={(event) => {
+                      setTo(event.target.value)
+                      setPage(1)
+                    }}
+                    className={fieldClass}
+                  />
+                </FilterField>
+              </div>
+            </div>
+            <div className="rounded-[12px] bg-muted px-3.5 py-3">
+              <p className="font-geist text-[12px] font-semibold text-ink-2">
+                {number(filtered.length)} ta natija
+              </p>
+              <p className="mt-0.5 font-geist text-[11px] text-ink-3">
+                Jami bazaning {percent((filtered.length / Math.max(1, users.length)) * 100, 1)} qismi
+              </p>
+            </div>
+          </div>
+        </Drawer>
+
+        <Drawer
+          open={Boolean(drawerUser)}
+          onClose={() => setDrawerId(null)}
+          title="Foydalanuvchi profili"
+          subtitle={drawerUser ? `#${drawerUser.id}` : undefined}
+          footer={
+            drawerUser ? (
+              <div className="flex items-center justify-between gap-2">
+                <Link
+                  href={`/admin/users/${drawerUser.id}`}
+                  className="font-geist text-[12px] font-semibold text-brand-text hover:underline"
+                >
+                  To'liq profil →
+                </Link>
+                <Button size="sm" variant="secondary" onClick={() => setDrawerId(null)}>
+                  Yopish
+                </Button>
+              </div>
+            ) : undefined
+          }
+        >
+          {drawerUser ? (
+            <UserProfile
+              user={drawerUser}
+              transactions={transactions}
+              olympiads={olympiads}
+              onGivePro={(user) => {
+                setProTargets([user])
+                setProOpen(true)
+              }}
+              onGiveCoins={(user) => {
+                setCoinsTargets([user])
+                setCoinsOpen(true)
+              }}
+              onToggleBlock={toggleBlock}
+            />
+          ) : null}
+        </Drawer>
+
+        <GiveProModal open={proOpen} onClose={() => setProOpen(false)} targets={proTargets} />
+        <CoinsModal open={coinsOpen} onClose={() => setCoinsOpen(false)} targets={coinsTargets} />
+
+        <Modal
+          open={deleteIds.length > 0}
+          onClose={() => setDeleteIds([])}
+          title="Foydalanuvchini o'chirish"
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeleteIds([])}>
+                Bekor qilish
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete}>
+                <Trash2 className="h-4 w-4" /> O'chirish
+              </Button>
+            </>
+          }
+        >
+          <p className="text-[13px] text-ink-2">
+            {deleteIds.length} ta foydalanuvchi butunlay o'chiriladi. Bu amalni ortga qaytarish
+            mumkin emas.
+          </p>
+          <div className="mt-3 rounded-lg bg-error-bg px-3 py-2 text-[12px] text-error">
+            Tegishli to'lovlar va natijalar arxivda saqlanadi, ammo foydalanuvchi ilovaga kira
+            olmaydi.
+          </div>
+        </Modal>
+      </div>
     </PageTransition>
   )
 }
