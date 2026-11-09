@@ -1,42 +1,61 @@
-import Image from 'next/image'
 import { redirect } from 'next/navigation'
+import { Library, Trophy, Users } from 'lucide-react'
 import { ADMIN_EMAIL, ADMIN_PASSWORD, demoHintVisible, readSession } from '@/lib/auth'
 import LoginForm from './LoginForm'
 
-export const metadata = { title: 'Kirish — HDP Academy Admin' }
+export const metadata = { title: 'Kirish — HDP Academy' }
+
+const MODULES = [
+  {
+    icon: Users,
+    title: 'Foydalanuvchilar',
+    subtitle: "O'quvchilar bazasi, profillar va progress",
+  },
+  {
+    icon: Library,
+    title: 'Kontent',
+    subtitle: 'Fanlar, mavzular, videolar va testlar',
+  },
+  {
+    icon: Trophy,
+    title: 'Olimpiadalar',
+    subtitle: "Musobaqalar, jonli monitoring va natijalar",
+  },
+]
 
 export default async function LoginPage() {
   const session = await readSession()
   if (session) redirect('/admin')
 
   return (
-    <main className="relative h-dvh overflow-hidden bg-[#eaeFec] p-3 sm:p-5 lg:p-8">
-      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full bg-[#86efac]/45 blur-[110px]" />
-      <div className="pointer-events-none absolute -bottom-48 right-[-10%] h-[560px] w-[560px] rounded-full bg-[#93c5fd]/35 blur-[120px]" />
-      <div className="pointer-events-none absolute left-1/3 top-1/4 h-[380px] w-[380px] rounded-full bg-[#fef3c7]/50 blur-[100px]" />
-
-      <div className="relative mx-auto flex h-full w-full max-w-[1200px] rounded-[30px] border border-white/70 bg-white/55 p-1.5 shadow-[0_40px_90px_-40px_rgba(12,45,28,0.35)] backdrop-blur-xl sm:p-2">
-        <div className="grid h-full w-full gap-2 lg:grid-cols-[minmax(0,470px)_1fr]">
-          <section className="no-scrollbar flex min-h-0 flex-col overflow-y-auto rounded-[24px] bg-white px-6 py-6 sm:px-10 sm:py-8 lg:px-12 lg:py-10 [@media(max-height:820px)]:py-3">
-            <div className="mx-auto flex w-full max-w-[430px] items-center gap-3 lg:max-w-none">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl brand-gradient font-display text-xl font-extrabold text-white shadow-brand">
-                H
-              </div>
-              <div>
-                <p className="font-display text-[15px] font-bold leading-tight text-ink">HDP Academy</p>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-3">Admin panel</p>
-              </div>
+    <main className="admin-theme h-dvh overflow-hidden bg-white">
+      <div className="grid h-full lg:grid-cols-[minmax(0,1fr)_minmax(440px,44%)]">
+        <section className="flex h-full min-h-0 flex-col px-5 py-5 sm:px-10 sm:py-7 lg:px-14 xl:px-20">
+          <header className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-[12px] bg-brand font-geist text-[18px] font-extrabold text-white shadow-brand">
+              H
             </div>
+            <div>
+              <p className="font-geist text-[15.5px] font-extrabold leading-tight text-ink">
+                HDP Academy
+              </p>
+              <p className="text-[9.5px] font-semibold uppercase tracking-[0.2em] text-ink-3">
+                Admin panel
+              </p>
+            </div>
+          </header>
 
-            <div className="mx-auto mt-8 flex w-full max-w-[430px] flex-1 flex-col justify-center lg:max-w-none [@media(max-height:820px)]:mt-3">
-              <span className="inline-flex w-fit items-center gap-2 rounded-full border border-line-brand bg-brand-soft px-2.5 py-1 text-[11px] font-semibold text-brand-text">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-                Xavfsiz kirish
+          <div className="flex min-h-0 flex-1 flex-col justify-center py-4">
+            <div className="mx-auto w-full max-w-[430px] lg:mx-0 lg:max-w-[420px]">
+              <span className="inline-flex items-center gap-2 font-geist text-[11px] font-bold uppercase tracking-[0.16em] text-ink-3">
+                <span className="h-px w-6 bg-brand" />
+                Boshqaruv paneli · 2026
               </span>
-              <h1 className="mt-4 font-display text-[30px] font-extrabold leading-[1.15] tracking-[-0.02em] text-ink sm:text-[34px] [@media(max-height:820px)]:text-[28px]">
-                Xush kelibsiz
+
+              <h1 className="mt-3 font-geist text-[38px] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink sm:text-[46px] xl:text-[52px] [@media(max-height:760px)]:text-[34px]">
+                Xush kelibsiz<span className="text-brand">.</span>
               </h1>
-              <p className="mt-2 text-[14px] leading-relaxed text-ink-3 [@media(max-height:820px)]:mt-1 [@media(max-height:820px)]:text-[13px]">
+              <p className="mt-2.5 text-[14px] leading-relaxed text-ink-3 sm:text-[15px]">
                 Panelga kirish uchun admin hisobingizdan foydalaning.
               </p>
 
@@ -44,42 +63,81 @@ export default async function LoginPage() {
                 demo={demoHintVisible ? { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } : null}
               />
             </div>
+          </div>
 
-            <div className="mx-auto mt-8 flex w-full max-w-[430px] flex-wrap items-center justify-between gap-2 border-t border-line-2 pt-4 text-[12px] text-ink-3 lg:max-w-none [@media(max-height:820px)]:mt-3 [@media(max-height:820px)]:pt-2">
-              <span>© 2026 HDP Academy</span>
-              <a href="mailto:support@hdp.uz" className="font-semibold text-brand-text hover:underline">
-                support@hdp.uz
-              </a>
-            </div>
-          </section>
+          <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line-2 pt-3.5 text-[12px] text-ink-3">
+            <span>© 2026 HDP Academy</span>
+            <a
+              href="mailto:support@hdp.uz"
+              className="font-semibold text-brand-text transition hover:text-brand-hover"
+            >
+              support@hdp.uz
+            </a>
+          </footer>
+        </section>
 
-          <aside className="relative hidden overflow-hidden rounded-[24px] bg-[#e7f4ec] lg:block">
-            <Image
-              src="/login-hero.png"
-              alt="Matematika o'quv platformasi illyustratsiyasi"
-              fill
-              priority
-              sizes="(min-width: 1024px) 60vw, 0px"
-              className="object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b3a22]/85 via-[#0b3a22]/15 to-transparent" />
+        <aside className="relative hidden overflow-hidden bg-ink lg:flex lg:flex-col lg:justify-between lg:px-12 lg:py-12 xl:px-14">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage:
+                'linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)',
+              backgroundSize: '72px 72px',
+            }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-32 -top-28 h-[460px] w-[460px] rounded-full bg-brand/25 blur-[130px]"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-44 -left-28 h-[400px] w-[400px] rounded-full bg-brand/[0.14] blur-[120px]"
+          />
 
-            <div className="absolute left-6 top-6 inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-md">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#86efac]" />
-              Boshqaruv paneli · 2026
-            </div>
+          <div className="relative">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 font-geist text-[10.5px] font-bold uppercase tracking-[0.16em] text-white/75">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-light" />
+              HDP Academy
+            </span>
+          </div>
 
-            <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-white/25 bg-white/15 p-5 text-white backdrop-blur-md">
-              <p className="font-display text-[22px] font-bold leading-snug tracking-[-0.01em]">
-                Matematika platformasini bitta panelda boshqaring
-              </p>
-              <p className="mt-2 text-[13px] leading-relaxed text-white/80">
-                O'quvchilar, kontent, testlar, olimpiadalar va to'lovlar — barchasi yagona, tez va
-                ishonchli joyda.
-              </p>
-            </div>
-          </aside>
-        </div>
+          <div className="relative max-w-[440px]">
+            <h2 className="font-geist text-[34px] font-extrabold leading-[1.08] tracking-[-0.025em] text-white xl:text-[42px]">
+              Butun akademiya — <span className="text-brand-light">bitta panelda.</span>
+            </h2>
+            <p className="mt-4 max-w-[380px] text-[14px] leading-relaxed text-white/55">
+              Kontent, o'quvchilar, olimpiadalar va to'lovlar — har kuni kerak bo'ladigan barcha
+              vositalar bir joyda.
+            </p>
+
+            <ul className="mt-8 space-y-2.5">
+              {MODULES.map((item) => (
+                <li
+                  key={item.title}
+                  className="flex items-center gap-3.5 rounded-[14px] border border-white/10 bg-white/[0.04] px-3.5 py-3"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-brand/15 text-brand-light">
+                    <item.icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-geist text-[13.5px] font-bold text-white">
+                      {item.title}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11.5px] text-white/45">
+                      {item.subtitle}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="relative flex items-center justify-between text-[11px] text-white/35">
+            <span>Xavfsiz admin sessiyasi</span>
+            <span className="font-geist font-semibold tracking-[0.08em]">hdp.uz</span>
+          </div>
+        </aside>
       </div>
     </main>
   )
