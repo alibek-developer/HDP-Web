@@ -537,3 +537,39 @@ export function FunnelChart({ steps }: { steps: Array<{ label: string; value: nu
     </div>
   )
 }
+
+export function Sparkline({
+  data,
+  color = '#e8522a',
+  height = 36,
+}: {
+  data: number[]
+  color?: string
+  height?: number
+}) {
+  const points = data.map((value, index) => ({ index, value }))
+  const gradientId = `spark-${color.replace(/[^a-z0-9]/gi, '')}`
+  return (
+    <div style={{ height }} className="w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={points} margin={{ top: 3, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={color}
+            strokeWidth={1.6}
+            fill={`url(#${gradientId})`}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}

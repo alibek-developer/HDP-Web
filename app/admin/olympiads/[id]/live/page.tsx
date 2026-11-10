@@ -9,374 +9,375 @@ import {
   Clock3,
   FileQuestion,
   OctagonX,
-  Pencil,
   Radio,
   Trophy,
   UserCheck,
-  Users,
-  UserX,
 } from 'lucide-react'
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Modal,
-  ProgressBar,
-  SectionCard,
-  StatCard,
-  cn,
-  useToast,
-} from '@/components/ui'
-import { useAppStore } from '@/lib/store'
+import { PageTransition } from '@/components/layout/Page'
+import { Avatar, Badge, Button, EmptyState, Modal, cn, useToast } from '@/components/ui'
 import { MOCK_NOW, clock, number } from '@/lib/format'
-import { shortName } from '@/lib/olympiads'
+import { olympiadParticipants, shortName } from '@/lib/olympiads'
+import { useAppStore } from '@/lib/store'
 
 interface LeaderRow {
-  id: string
+  userId: string
   name: string
-  tone: string
   score: number
+  total: number
+  delta: number
+  prev: number
+}
+
+function PanelStat({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: typeof Clock3
+  label: string
+  value: string
+  accent?: boolean
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-white/40">
+        <Icon className="h-3 w-3" /> {label}
+      </div>
+      <div
+        className={cn(
+          'mt-1 text-[22px] font-geist leading-none tabular-nums',
+          accent ? 'text-brand-light' : 'text-white',
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  )
 }
 
 export default function LiveOlympiadPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { toast } = useToast()
   const olympiad = useAppStore((state) => state.olympiads.find((item) => item.id === params.id))
   const users = useAppStore((state) => state.users)
-  const tests = useAppStore((state) => state.tests)
   const stopOlympiad = useAppStore((state) => state.stopOlympiad)
-  const [confirmStop, setConfirmStop] = useState(false)
+  const { toast } = useToast()
 
-  const total = olympiad?.questionIds.length || 30
-
-  const initialRemaining = useMemo(() => {
-    if (!olympiad) return 0
-    return Math.max(
-      0,
-      Math.round(
-        (new Date(olympiad.startAt).getTime() + olympiad.duration * 60_000 - MOCK_NOW.getTime()) / 1000,
-      ),
-    )
-  }, [olympiad])
-
-  const [remaining, setRemaining] = useState(initialRemaining)
-  const [live, setLive] = useState(() => ({
-    playing: olympiad?.playing ?? 0,
-    finished: olympiad?.finished ?? 0,
-    left: olympiad?.left ?? 0,
-  }))
-  const [leaders, setLeaders] = useState<LeaderRow[]>([])
+  const [now, setNow] = useState(() => MOCK_NOW.getTime())
+  const [showStop, setShowStop] = useState(false)
 
   useEffect(() => {
-    setRemaining(initialRemaining)
-  }, [initialRemaining])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setRemaining((value) => Math.max(0, value - 1))
-    }, 1000)
-    return () => window.clearInterval(timer)
+    const timer = setInterval(() => setNow((value) => value + 1000), 1000)
+    return () => clearInterval(timer)
   }, [])
 
-  useEffect(() => {
-    if (!olympiad) return
-    setLive({
-      playing: olympiad.playing,
-      finished: olympiad.finished,
-      left: olympiad.left,
-    })
-    const base = olympiad.playing
-    const timer = window.setInterval(() => {
-      setLive((current) => {
-        const playing = Math.max(0, Math.min(olympiad.registered, base + Math.floor(Math.random() * 7) - 3))
-        const finished = current.finished + (Math.random() > 0.72 ? 1 : 0)
-        const left = Math.max(0, current.left + (Math.random() > 0.85 ? 1 : 0))
-        return {
-          playing: Math.max(0, playing - left + olympiad.left),
-          finished,
-          left,
-        }
-      })
-    }, 4000)
-    return () => window.clearInterval(timer)
-  }, [olympiad])
+  const startsAt = useMemo(
+    () => (olympiad ? Date.parse(olympiad.startAt) : 0),
+    [olympiad],
+  )
+  const durationMs = (olympiad ? olympiad.duration : 0) * 60_000
+  const endsAt = startsAt + durationMs
+  const elapsed = Math.max(0, Math.min(now - startsAt, durationMs))
+  const remaining = Math.max(0, endsAt - now)
+  const progress = durationMs > 0 ? elapsed / durationMs : 0
 
+  const [liveTick, setLiveTick] = useState(0)
+  const [leadersTick, setLeadersTick] = useState(0)
   useEffect(() => {
-    if (!olympiad) return
-    const seed = users.slice(0, 12).map((user, index) => ({
-      id: user.id,
-      name: user.name,
-      tone: user.tone,
-      score: Math.max(1, total - 2 - index),
-    }))
-    setLeaders(seed)
-    const timer = window.setInterval(() => {
-      setLeaders((current) =>
-        current
-          .map((row, index) => {
-            const canGrow = row.score < total && index < 6
-            const grows = canGrow && Math.random() > 0.6
-            return grows ? { ...row, score: row.score + 1 } : row
-          })
-          .sort((left, right) => right.score - left.score),
-      )
-    }, 7000)
-    return () => window.clearInterval(timer)
-  }, [olympiad, users, total])
+    const liveTimer = setInterval(() => setLiveTick((value) => value + 1), 4000)
+    const leadersTimer = setInterval(() => setLeadersTick((value) => value + 1), 7000)
+    return () => {
+      clearInterval(liveTimer)
+      clearInterval(leadersTimer)
+    }
+  }, [])
 
-  const questionRows = useMemo(() => {
+  const participants = useMemo(
+    () => (olympiad ? olympiadParticipants(olympiad, users) : []),
+    [olympiad, users],
+  )
+  const playing = participants.filter((row) => row.status === 'playing')
+  const finished = participants.filter((row) => row.status === 'finished')
+
+  const leaders = useMemo<LeaderRow[]>(() => {
     if (!olympiad) return []
-    return olympiad.questionIds
-      .slice(0, 10)
-      .map((id, index) => {
-        const test = tests.find((item) => item.id === id)
-        if (!test) return null
+    const base = [...playing, ...finished]
+      .map((row, index) => {
+        const total = olympiad.questionIds.length || 30
+        const score = Math.max(1, Math.round((total / (index + 4)) * 2.6))
         return {
-          id,
-          label: `Savol ${index + 1}`,
-          correct: Math.max(0, Math.min(100, 100 - test.errorRate)),
-          question: test.question,
+          userId: row.user.id,
+          name: row.user.name,
+          score,
+          total,
+          delta: index % 4 === 0 ? 1 : 0,
+          prev: Math.max(1, score - (index % 3 === 0 ? 2 : index % 3)),
         }
       })
-      .filter(Boolean) as Array<{ id: string; label: string; correct: number; question: string }>
-  }, [olympiad, tests])
+      .slice(0, 12)
+    return base
+      .map((row, index) => {
+        const shift = (leadersTick + index) % 4 === 0 ? row.delta : 0
+        return { ...row, score: row.score + shift }
+      })
+      .sort((a, b) => b.score - a.score || a.prev - b.prev)
+  }, [olympiad, playing, finished, leadersTick])
 
-  if (!olympiad) {
+  const questionStats = useMemo(() => {
+    if (!olympiad) return []
+    const totalQuestions = olympiad.questionIds.length || 30
+    return Array.from({ length: Math.min(10, totalQuestions) }, (_, index) => {
+      const wrongRate = 18 + ((index * 13 + liveTick * 3) % 55)
+      const answered = olympiad.playing + olympiad.finished
+      return {
+        index,
+        correct: Math.max(1, Math.round((answered * (100 - wrongRate)) / 100)),
+        wrongRate,
+        answered,
+      }
+    })
+  }, [olympiad, liveTick])
+
+  if (!olympiad || olympiad.status !== 'live') {
     return (
-      <Card>
-        <EmptyState
-          title="Olimpiada topilmadi"
-          text="Bu olimpiada o'chirilgan yoki mavjud emas."
-          icon={<Trophy className="h-5 w-5" />}
-          action={
-            <Link href="/admin/olympiads">
-              <Button variant="secondary" size="sm">
-                <ArrowLeft className="h-3.5 w-3.5" /> Olimpiadalar ro'yxati
-              </Button>
+      <PageTransition>
+        <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/admin/olympiads"
+              className="inline-flex h-8 items-center gap-1 text-[12px] font-semibold text-ink-3 hover:text-ink"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Olimpiadalar
             </Link>
-          }
-        />
-      </Card>
+          </div>
+          <div className="grid min-h-0 flex-1 place-items-center rounded-[18px] border border-dashed border-line bg-white">
+            <EmptyState
+              title="Jonli olimpiada emas"
+              text="Bu sahifa faqat hozir o'tayotgan olimpiadalar uchun ishlaydi."
+              icon={<Radio className="h-5 w-5" />}
+              action={
+                <Link href="/admin/olympiads">
+                  <Button variant="secondary" size="sm">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Ro'yxatga qaytish
+                  </Button>
+                </Link>
+              }
+            />
+          </div>
+        </div>
+      </PageTransition>
     )
   }
 
-  if (olympiad.status !== 'live') {
-    return (
-      <Card>
-        <EmptyState
-          title="Olimpiada jonli emas"
-          text="Jonli monitoring faqat davom etayotgan olimpiadalar uchun mavjud."
-          icon={<Radio className="h-5 w-5" />}
-          action={
-            <Link href={`/admin/olympiads/${olympiad.id}`}>
-              <Button variant="secondary" size="sm">
-                <ArrowLeft className="h-3.5 w-3.5" /> Olimpiadaga qaytish
-              </Button>
-            </Link>
-          }
-        />
-      </Card>
-    )
+  const handleStop = () => {
+    stopOlympiad(olympiad.id)
+    toast({ title: "Olimpiada to'xtatildi", tone: 'warning' })
+    setShowStop(false)
+    router.push(`/admin/olympiads/${olympiad.id}/results`)
   }
 
-  const progress = olympiad.duration > 0 ? ((olympiad.duration * 60 - remaining) / (olympiad.duration * 60)) * 100 : 0
+  const playingCount = olympiad.playing
+  const finishedCount = olympiad.finished
+  const leftCount = olympiad.left
+  const registeredCount = olympiad.registered
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link
-            href={`/admin/olympiads/${olympiad.id}`}
-            className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-3 transition hover:text-ink"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Olimpiada
-          </Link>
-          <div className="mt-1 flex flex-wrap items-center gap-2.5">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-error opacity-70" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-error" />
-            </span>
-            <h1 className="h2 text-ink">JONLI — {olympiad.name}</h1>
-          </div>
-          <p className="mt-1 text-[13px] text-ink-3">
-            Real vaqtda kuzatuv. Ma'lumotlar avtomatik yangilanadi.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/admin/olympiads/${olympiad.id}/edit`}>
-            <Button variant="ghost">
-              <Pencil className="h-4 w-4" /> Tahrirlash
-            </Button>
-          </Link>
-          <Button variant="destructive" onClick={() => setConfirmStop(true)}>
-            <OctagonX className="h-4 w-4" /> Olimpiadani to'xtatish
-          </Button>
-        </div>
-      </div>
-
-      <Card className="relative overflow-hidden p-0">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand via-[#22c55e] to-[#86efac]" />
-        <div className="flex flex-col items-center px-5 py-7 text-center">
-          <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-3">
-            <Clock3 className="h-3.5 w-3.5" /> Qolgan vaqt
-          </p>
-          <p className="mt-2 font-display text-[46px] font-extrabold leading-none tracking-[-0.02em] text-ink tabular sm:text-[58px]">
-            {clock(remaining)}
-          </p>
-          <div className="mt-5 w-full max-w-2xl">
-            <ProgressBar value={progress} height={8} tone="gradient" />
-            <div className="mt-2 flex items-center justify-between text-[11px] text-ink-3">
-              <span>{olympiad.duration} daqiqalik olimpiada</span>
-              <span>{Math.round(progress)}% bajarildi</span>
+    <PageTransition>
+      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
+              <Link
+                href="/admin/olympiads"
+                className="inline-flex h-7 items-center gap-1 transition hover:text-ink"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Olimpiadalar
+              </Link>
+              <span className="text-placeholder">/</span>
+              <span className="truncate">{olympiad.name}</span>
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center gap-2">
+              <h1 className="h2 truncate text-ink">Jonli monitoring</h1>
+              <Badge tone="danger" dot>
+                JONLI
+              </Badge>
             </div>
           </div>
-        </div>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Ro'yxatdan o'tgan"
-          value={number(olympiad.registered)}
-          icon={<Users className="h-5 w-5" />}
-        />
-        <StatCard
-          label="Qatnashmoqda"
-          value={number(live.playing)}
-          icon={<UserCheck className="h-5 w-5" />}
-          iconClass="bg-brand-soft text-brand"
-          hint="Real vaqtda yangilanadi"
-        />
-        <StatCard
-          label="Tugatdi"
-          value={number(live.finished)}
-          icon={<CheckCircle2 className="h-5 w-5" />}
-          iconClass="bg-success-bg text-success"
-        />
-        <StatCard
-          label="Tark etdi"
-          value={number(live.left)}
-          icon={<UserX className="h-5 w-5" />}
-          iconClass="bg-error-bg text-error"
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SectionCard title="Jonli reyting" subtitle="Top 12 ishtirokchi">
-          <div className="space-y-1">
-            {leaders.map((row, index) => (
-              <div key={row.id} className="flex items-center gap-3 border-b border-line-2 py-2.5 last:border-0">
-                <span
-                  className={cn(
-                    'grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold',
-                    index === 0
-                      ? 'bg-coin text-white'
-                      : index === 1
-                        ? 'bg-[#94a3b8] text-white'
-                        : index === 2
-                          ? 'bg-[#c2865a] text-white'
-                          : 'bg-muted text-ink-3',
-                  )}
-                >
-                  {index + 1}
-                </span>
-                <Avatar name={row.name} tone={row.tone} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-[13px] font-semibold text-ink">{shortName(row.name)}</p>
-                    <p className="text-[12px] font-bold text-ink tabular">
-                      {row.score}/{total}
-                    </p>
-                  </div>
-                  <ProgressBar
-                    value={(row.score / total) * 100}
-                    height={4}
-                    tone={index === 0 ? 'gradient' : 'brand'}
-                    className="mt-1.5"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Savollar statistikasi" subtitle="To'g'ri javob foizi">
-          {questionRows.length === 0 ? (
-            <EmptyState
-              title="Savollar yo'q"
-              text="Olimpiadaga savollar qo'shilmagan."
-              icon={<FileQuestion className="h-5 w-5" />}
-            />
-          ) : (
-            <div className="space-y-2.5">
-              {questionRows.map((row) => (
-                <div key={row.id} className="rounded-xl border border-line bg-white px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[12px] font-semibold text-ink">{row.label}</p>
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={cn(
-                          'text-[12px] font-bold tabular',
-                          row.correct < 50 ? 'text-error' : 'text-ink-2',
-                        )}
-                      >
-                        {row.correct}% to'g'ri
-                      </span>
-                      {row.correct < 50 ? <Badge tone="danger">qiyin savol</Badge> : null}
-                    </div>
-                  </div>
-                  <p className="mt-0.5 truncate text-[11px] text-ink-3">{row.question}</p>
-                  <ProgressBar
-                    value={row.correct}
-                    height={5}
-                    tone={row.correct < 50 ? 'danger' : 'brand'}
-                    className="mt-1.5"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </div>
-
-      <Modal
-        open={confirmStop}
-        onClose={() => setConfirmStop(false)}
-        title="Olimpiadani to'xtatish"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmStop(false)}>
-              Bekor qilish
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                stopOlympiad(olympiad.id)
-                toast({
-                  title: "Olimpiada to'xtatildi",
-                  description: "Natijalarni e'lon qilish sahifasiga o'tildi.",
-                  tone: 'warning',
-                })
-                router.push(`/admin/olympiads/${olympiad.id}/results`)
-              }}
-            >
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href={`/admin/olympiads/${olympiad.id}/edit`} className="hidden sm:inline-flex">
+              <Button variant="ghost">Tahrirlash</Button>
+            </Link>
+            <Button variant="destructive" onClick={() => setShowStop(true)} className="h-10 sm:h-11">
               <OctagonX className="h-4 w-4" /> To'xtatish
             </Button>
-          </>
-        }
-      >
-        <div className="space-y-2 text-[13px] text-ink-2">
-          <p>
-            Olimpiada to'xtatiladi va qatnashayotgan{' '}
-            <span className="font-semibold text-ink">{number(live.playing)}</span> ishtirokchi uchun test
-            yakunlanadi.
-          </p>
-          <p className="text-[12px] text-ink-3">Bu amaldan keyin olimpiada qayta boshlanmaydi.</p>
+          </div>
         </div>
-      </Modal>
-    </div>
+
+        <section className="flex shrink-0 flex-col gap-3 rounded-[18px] bg-ink px-4 py-3 text-white shadow-card sm:px-5 sm:py-4 lg:flex-row lg:items-center">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-white/50">
+              <Clock3 className="h-3 w-3" /> Qolgan vaqt
+            </div>
+            <div className="mt-1 text-[38px] font-geist leading-none tabular-nums text-brand-light sm:text-[46px]">
+              {clock(remaining)}
+            </div>
+            <div className="mt-1.5 text-[11px] text-white/50">
+              {olympiad.duration} daqiqalik · {Math.round(progress * 100)}% bajarildi
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-brand-light to-brand transition-[width] duration-1000"
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[420px]">
+            <PanelStat icon={UserCheck} label="Ro'yxatdan o'tgan" value={number(registeredCount)} />
+            <PanelStat icon={Radio} label="Qatnashmoqda" value={number(playingCount)} accent />
+            <PanelStat icon={CheckCircle2} label="Tugatdi" value={number(finishedCount)} />
+            <PanelStat icon={OctagonX} label="Tark etdi" value={number(leftCount)} />
+          </div>
+        </section>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-[10.5px] font-semibold text-ink-3">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-brand-light" /> Faol
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-success" /> Yakunlagan
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-ink-3/50" /> Kutilmoqda
+          </span>
+          <span className="ml-auto text-ink-2">
+            {number(Math.max(0, registeredCount - playingCount - finishedCount - leftCount))} kishi hali
+            kirmagan
+          </span>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-line bg-white shadow-card">
+            <header className="flex shrink-0 items-center gap-2 border-b border-line-2 px-3 py-2.5 sm:px-4">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-brand-soft text-brand-text">
+                <Trophy className="h-3.5 w-3.5" />
+              </span>
+              <h2 className="text-[12.5px] font-bold text-ink">Jonli reyting</h2>
+              <span className="ml-auto text-[10px] font-semibold text-ink-3">
+                7 soniyada yangilanadi
+              </span>
+            </header>
+            <ol className="min-h-0 flex-1 divide-y divide-line-2 overflow-y-auto [contain:paint]">
+              {leaders.map((row, index) => {
+                const medal =
+                  index === 0
+                    ? 'bg-[#b45309]/10 text-[#b45309]'
+                    : index === 1
+                      ? 'bg-ink-3/10 text-ink-3'
+                      : index === 2
+                        ? 'bg-[#c2865a]/15 text-[#c2865a]'
+                        : 'bg-muted text-ink-3'
+                return (
+                  <li
+                    key={row.userId}
+                    className="flex items-center gap-2.5 px-3 py-2 sm:px-4"
+                  >
+                    <span
+                      className={cn(
+                        'grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-[10px] font-bold',
+                        medal,
+                      )}
+                    >
+                      {index + 1}
+                    </span>
+                    <Avatar name={row.name} size="md" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12.5px] font-semibold text-ink">
+                        {shortName(row.name)}
+                      </p>
+                      <p className="text-[10px] text-ink-3">
+                        {row.score}/{row.total} ball
+                      </p>
+                    </div>
+                    <div className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted sm:w-24">
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${Math.min(100, (row.score / row.total) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="w-9 shrink-0 text-right text-[11px] font-bold tabular-nums text-ink">
+                      {row.score}
+                    </span>
+                  </li>
+                )
+              })}
+            </ol>
+          </section>
+
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-line bg-white shadow-card">
+            <header className="flex shrink-0 items-center gap-2 border-b border-line-2 px-3 py-2.5 sm:px-4">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-brand-soft text-brand-text">
+                <FileQuestion className="h-3.5 w-3.5" />
+              </span>
+              <h2 className="text-[12.5px] font-bold text-ink">Savollar statistikasi</h2>
+              <span className="ml-auto text-[10px] font-semibold text-ink-3">4 soniyada</span>
+            </header>
+            <div className="min-h-0 flex-1 divide-y divide-line-2 overflow-y-auto [contain:paint]">
+              {questionStats.map((row) => {
+                const correctPct =
+                  row.answered > 0 ? Math.round((row.correct / row.answered) * 100) : 0
+                return (
+                  <div key={row.index} className="px-3 py-2 sm:px-4">
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[7px] bg-muted text-[10px] font-bold text-ink-3">
+                        {row.index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-ink-2">
+                        Savol {row.index + 1}
+                      </span>
+                      <Badge tone={row.wrongRate > 50 ? 'danger' : 'gray'}>
+                        {row.wrongRate > 50 ? 'qiyin' : `${correctPct}% to'g'ri`}
+                      </Badge>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-brand-light to-brand"
+                        style={{ width: `${correctPct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <footer className="shrink-0 border-t border-line-2 px-3 py-2 text-[10px] font-semibold text-ink-3 sm:px-4">
+              Yana {Math.max(0, (olympiad.questionIds.length || 30) - questionStats.length)} ta savol
+              kuzatilmoqda
+            </footer>
+          </section>
+        </div>
+
+        <Modal
+          open={showStop}
+          onClose={() => setShowStop(false)}
+          title="Olimpiadani to'xtatish"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setShowStop(false)}>
+                Bekor qilish
+              </Button>
+              <Button variant="destructive" onClick={handleStop} className="h-11 sm:h-10">
+                Ha, to'xtatish
+              </Button>
+            </>
+          }
+        >
+          <p className="text-[13px] leading-relaxed text-ink-2">
+            {olympiad.name} hozirda davom etmoqda va {number(playingCount)} kishi qatnashyapti.
+            To'xtatilsa, barcha ishtirokchilar chiqariladi va olimpiada yakunlanadi. Bu amalni ortga
+            qaytarib bo'lmaydi.
+          </p>
+        </Modal>
+      </div>
+    </PageTransition>
   )
 }

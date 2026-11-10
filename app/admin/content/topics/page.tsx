@@ -3,43 +3,57 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   Eye,
   FileQuestion,
   GripVertical,
+  Layers,
   MoreVertical,
   Pencil,
   Plus,
+  Search,
+  Sparkles,
   Trash2,
   Video as VideoIcon,
 } from 'lucide-react'
-import { PageHeader, PageTransition } from '@/components/layout/Page'
+import { PageTransition } from '@/components/layout/Page'
+import { ContentHeader, ContentTabs, contentRoot } from '@/components/content/ContentShell'
 import {
   Badge,
   Button,
-  Checkbox,
-  DifficultyBadge,
   Drawer,
   Dropdown,
   EmptyState,
-  Field,
-  IconButton,
-  Input,
   Modal,
-  SearchInput,
-  Select,
   Switch,
-  Tabs,
-  Textarea,
   cn,
   useToast,
 } from '@/components/ui'
 import { useAppStore } from '@/lib/store'
-import { number, percent } from '@/lib/format'
-import type { ContentStatus, Test, TestDifficulty, Topic, Video } from '@/lib/types'
+import { date, number, percent } from '@/lib/format'
+import type { ContentStatus, SubjectColor, Test, TestDifficulty, Topic, Video } from '@/lib/types'
 
-const statusLabel: Record<ContentStatus, string> = { active: 'Faol', draft: 'Draft', hidden: 'Yashirin' }
+const STATUS: Record<ContentStatus, { label: string; text: string; dot: string; soft: string }> = {
+  active: { label: 'Faol', text: 'text-brand-text', dot: 'bg-brand', soft: 'bg-brand-soft' },
+  draft: { label: 'Draft', text: 'text-warning', dot: 'bg-warning', soft: 'bg-warning-bg' },
+  hidden: { label: 'Yashirin', text: 'text-ink-3', dot: 'bg-ink-3/50', soft: 'bg-muted' },
+}
+
+const TONES: Record<SubjectColor, { soft: string; text: string; dot: string }> = {
+  green: { soft: 'bg-[#dcfce7]', text: 'text-[#15803d]', dot: 'bg-[#16a34a]' },
+  blue: { soft: 'bg-[#dbeafe]', text: 'text-[#1d4ed8]', dot: 'bg-[#2563eb]' },
+  violet: { soft: 'bg-[#ede9fe]', text: 'text-[#6d28d9]', dot: 'bg-[#7c3aed]' },
+  amber: { soft: 'bg-[#fef3c7]', text: 'text-[#b45309]', dot: 'bg-[#d97706]' },
+  red: { soft: 'bg-[#fee2e2]', text: 'text-[#b91c1c]', dot: 'bg-[#dc2626]' },
+  gray: { soft: 'bg-[#f3f4f6]', text: 'text-[#4b5563]', dot: 'bg-[#9ca3af]' },
+}
+
+const toneOf = (color?: SubjectColor) => TONES[color ?? 'gray'] ?? TONES.gray
+
+const fieldClass =
+  'h-11 w-full rounded-[10px] border border-line bg-white px-3 font-geist text-[13px] font-medium text-ink outline-none transition placeholder:text-placeholder hover:border-line-brand focus:border-brand focus:ring-4 focus:ring-brand/10'
 
 const youtubeIdFrom = (input: string): string => {
   const match = input.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/)
@@ -60,8 +74,10 @@ export default function TopicsPage() {
   const [subjectFilter, setSubjectFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | ContentStatus>('all')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Topic | null>(null)
+  const [newOpen, setNewOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -70,6 +86,7 @@ export default function TopicsPage() {
   }, [])
 
   const subjectName = (id: string) => subjects.find((subject) => subject.id === id)?.nameUz ?? '—'
+  const subjectById = (id: string) => subjects.find((subject) => subject.id === id)
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -80,6 +97,16 @@ export default function TopicsPage() {
       .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name))
   }, [topics, subjectFilter, status, search])
 
+  useEffect(() => {
+    if (filtered.length === 0) {
+      if (selectedId !== null) setSelectedId(null)
+      return
+    }
+    if (!selectedId || !filtered.some((topic) => topic.id === selectedId)) {
+      setSelectedId(filtered[0].id)
+    }
+  }, [filtered, selectedId])
+
   const counts = useMemo(() => {
     const videoCount = new Map<string, number>()
     const testCount = new Map<string, number>()
@@ -88,29 +115,15 @@ export default function TopicsPage() {
     return { videoCount, testCount }
   }, [videos, tests])
 
-  const createTopic = () => {
-    const subjectId = subjectFilter !== 'all' ? subjectFilter : subjects[0]?.id
-    if (!subjectId) {
-      toast({ title: 'Avval fan yarating', tone: 'warning' })
-      return
+  const selectedTopic = topics.find((topic) => topic.id === selectedId) ?? null
+  const drawerTopic = topics.find((topic) => topic.id === drawerId) ?? null
+
+  const openTopic = (id: string) => {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches) {
+      setSelectedId(id)
+    } else {
+      setDrawerId(id)
     }
-    const order = topics.filter((topic) => topic.subjectId === subjectId).length + 1
-    const created: Topic = {
-      id: `topic-${Date.now().toString(36)}`,
-      subjectId,
-      name: 'Yangi mavzu',
-      description: '',
-      order,
-      status: 'draft',
-      proOnly: false,
-      views: 0,
-      avgMinutes: 0,
-      testTakers: 0,
-      avgScore: 0,
-      createdAt: new Date().toISOString(),
-    }
-    upsertTopic(created)
-    setDrawerId(created.id)
   }
 
   const move = (targetId: string) => {
@@ -128,146 +141,225 @@ export default function TopicsPage() {
     toast({ title: 'Tartib yangilandi', description: dragTopic.name, tone: 'success' })
   }
 
-  const drawerTopic = topics.find((topic) => topic.id === drawerId) ?? null
-
   return (
     <PageTransition>
-      <PageHeader
-        title="Mavzular"
-        subtitle="Mavzularni fan bo'yicha boshqaring va tartiblang"
-        breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Kontent', href: '/admin/content' }, { label: 'Mavzular' }]}
-        actions={
-          <Button onClick={createTopic}>
-            <Plus className="h-4 w-4" /> Yangi mavzu
-          </Button>
-        }
-      />
+      <div className={contentRoot}>
+        <ContentHeader
+          title="Mavzular"
+          count={topics.length}
+          subtitle="Mavzuni tanlang — videolar, testlar va statistikasi bir joyda."
+          actions={
+            <>
+              <Link
+                href="/admin/content/import"
+                aria-label="PDF import"
+                className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-line bg-white px-3.5 font-geist text-[13px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-4"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">PDF import</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setNewOpen(true)}
+                className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-ink px-3.5 font-geist text-[13px] font-bold text-white transition hover:bg-brand sm:px-4"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Yangi mavzu</span>
+                <span className="sm:hidden">Mavzu</span>
+              </button>
+            </>
+          }
+        />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1">
-          <button
-            type="button"
-            onClick={() => setSubjectFilter('all')}
-            className={cn(
-              'rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition',
-              subjectFilter === 'all' ? 'bg-white text-brand-text shadow-sm' : 'text-ink-3 hover:text-ink-2',
-            )}
-          >
-            Barchasi
-          </button>
-          {subjects.map((subject) => (
-            <button
-              key={subject.id}
-              type="button"
-              onClick={() => setSubjectFilter(subject.id)}
-              className={cn(
-                'rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition',
-                subjectFilter === subject.id ? 'bg-white text-brand-text shadow-sm' : 'text-ink-3 hover:text-ink-2',
-              )}
-            >
-              {subject.nameUz}
-            </button>
-          ))}
-        </div>
-        <SearchInput value={search} onChange={setSearch} placeholder="Mavzu nomi..." className="w-full sm:w-56" />
-        <Select
-          value={status}
-          onChange={(event) => setStatus(event.target.value as 'all' | ContentStatus)}
-          className="w-full sm:w-36"
-        >
-          <option value="all">Barcha status</option>
-          <option value="active">Faol</option>
-          <option value="draft">Draft</option>
-          <option value="hidden">Yashirin</option>
-        </Select>
-        <span className="ml-auto text-[12px] text-ink-3">{number(filtered.length)} ta mavzu</span>
-      </div>
+        <ContentTabs />
 
-      <div className="overflow-hidden rounded-xl border border-line bg-white shadow-card">
-        {filtered.length === 0 ? (
-          <EmptyState
-            title="Mavzu topilmadi"
-            text="Filtrlarni o'zgartiring yoki yangi mavzu qo'shing."
-            action={<Button size="sm" onClick={createTopic}>Yangi mavzu</Button>}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left">
-              <thead>
-                <tr className="border-b border-line bg-canvas text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-3">
-                  <th className="w-8 px-2 py-2.5" />
-                  <th className="w-10 px-2 py-2.5">№</th>
-                  <th className="px-3 py-2.5">Nomi</th>
-                  <th className="px-3 py-2.5">Fan</th>
-                  <th className="px-3 py-2.5">Videolar</th>
-                  <th className="px-3 py-2.5">Testlar</th>
-                  <th className="px-3 py-2.5">Ko'rishlar</th>
-                  <th className="px-3 py-2.5">Status</th>
-                  <th className="w-20 px-3 py-2.5 text-right">Amallar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((topic) => (
-                  <tr
-                    key={topic.id}
-                    draggable
-                    onDragStart={(event) => {
-                      setDragId(topic.id)
-                      event.dataTransfer.setData('text/plain', topic.id)
-                    }}
-                    onDragEnd={() => setDragId(null)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => move(topic.id)}
-                    className={cn(
-                      'group border-b border-line-2 text-[12.5px] transition last:border-0 hover:bg-canvas',
-                      dragId === topic.id && 'opacity-50',
-                    )}
-                  >
-                    <td className="px-2 py-2 text-ink-3">
-                      <GripVertical className="h-4 w-4 cursor-grab active:cursor-grabbing" aria-label="Tartibni o'zgartirish" />
-                    </td>
-                    <td className="px-2 py-2 tabular text-ink-3">{topic.order}</td>
-                    <td className="px-3 py-2">
-                      <button type="button" onClick={() => setDrawerId(topic.id)} className="flex items-center gap-2 text-left">
-                        <span className="max-w-[260px] truncate font-semibold text-ink hover:text-brand-text">{topic.name}</span>
-                        {topic.proOnly ? <Badge tone="violet">PRO</Badge> : null}
-                      </button>
-                    </td>
-                    <td className="px-3 py-2 text-ink-2">{subjectName(topic.subjectId)}</td>
-                    <td className="px-3 py-2 tabular text-ink-2">{counts.videoCount.get(topic.id) ?? 0}</td>
-                    <td className="px-3 py-2 tabular text-ink-2">{counts.testCount.get(topic.id) ?? 0}</td>
-                    <td className="px-3 py-2 tabular text-ink-2">{number(topic.views)}</td>
-                    <td className="px-3 py-2">
-                      <Badge tone={topic.status === 'active' ? 'success' : topic.status === 'draft' ? 'warning' : 'gray'}>
-                        {statusLabel[topic.status]}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-0.5">
-                        <IconButton label="Tahrirlash" onClick={() => setDrawerId(topic.id)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </IconButton>
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_440px]">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[20px] border border-line bg-white">
+            <div className="shrink-0 border-b border-line-2 px-3 pb-2.5 pt-3 sm:px-4">
+              <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
+                <button
+                  type="button"
+                  onClick={() => setSubjectFilter('all')}
+                  className={cn(
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-geist text-[12px] font-semibold transition',
+                    subjectFilter === 'all'
+                      ? 'bg-ink text-white'
+                      : 'border border-line bg-white text-ink-3 hover:border-line-brand hover:text-ink',
+                  )}
+                >
+                  Barchasi
+                  <span className={cn('tabular text-[10px]', subjectFilter === 'all' ? 'text-white/70' : 'text-ink-3/70')}>
+                    {topics.length}
+                  </span>
+                </button>
+                {subjects.map((subject) => {
+                  const total = topics.filter((topic) => topic.subjectId === subject.id).length
+                  const active = subjectFilter === subject.id
+                  return (
+                    <button
+                      key={subject.id}
+                      type="button"
+                      onClick={() => setSubjectFilter(subject.id)}
+                      className={cn(
+                        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-geist text-[12px] font-semibold transition',
+                        active
+                          ? 'bg-ink text-white'
+                          : 'border border-line bg-white text-ink-3 hover:border-line-brand hover:text-ink',
+                      )}
+                    >
+                      <span className={cn('h-1.5 w-1.5 rounded-full', active ? 'bg-brand-light' : toneOf(subject.color).dot)} />
+                      {subject.nameUz}
+                      <span className={cn('tabular text-[10px]', active ? 'text-white/70' : 'text-ink-3/70')}>{total}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-2.5 flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-placeholder" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Mavzu nomi bo'yicha qidirish..."
+                    className="h-10 w-full rounded-[10px] border border-line bg-white pl-9 pr-8 font-geist text-[12.5px] font-medium text-ink outline-none transition placeholder:text-placeholder hover:border-line-brand focus:border-brand focus:ring-4 focus:ring-brand/10"
+                  />
+                  {search ? (
+                    <button
+                      type="button"
+                      aria-label="Tozalash"
+                      onClick={() => setSearch('')}
+                      className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-ink-3 hover:bg-muted"
+                    >
+                      <span className="text-[15px] leading-none">×</span>
+                    </button>
+                  ) : null}
+                </div>
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value as 'all' | ContentStatus)}
+                  aria-label="Status"
+                  className="h-10 w-[122px] shrink-0 rounded-[10px] border border-line bg-white px-2.5 font-geist text-[12px] font-semibold text-ink-2 outline-none transition hover:border-line-brand focus:border-brand"
+                >
+                  <option value="all">Barcha status</option>
+                  <option value="active">Faol</option>
+                  <option value="draft">Draft</option>
+                  <option value="hidden">Yashirin</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <div className="grid h-full min-h-[220px] place-items-center px-4">
+                  <EmptyState
+                    title="Mavzu topilmadi"
+                    text="Filtrlarni o'zgartiring yoki yangi mavzu qo'shing."
+                    icon={<Layers className="h-5 w-5" />}
+                    action={
+                      <Button size="sm" onClick={() => setNewOpen(true)}>
+                        Yangi mavzu
+                      </Button>
+                    }
+                  />
+                </div>
+              ) : (
+                filtered.map((topic, index) => {
+                  const active = topic.id === selectedId
+                  const subject = subjectById(topic.subjectId)
+                  const statusMeta = STATUS[topic.status]
+                  return (
+                    <div
+                      key={topic.id}
+                      role="button"
+                      tabIndex={0}
+                      draggable
+                      onDragStart={(event) => {
+                        setDragId(topic.id)
+                        event.dataTransfer.setData('text/plain', topic.id)
+                      }}
+                      onDragEnd={() => setDragId(null)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => move(topic.id)}
+                      onClick={() => openTopic(topic.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openTopic(topic.id)
+                        }
+                      }}
+                      className={cn(
+                        'group relative flex cursor-pointer items-center gap-2.5 border-b border-line-2 px-3 py-2.5 transition last:border-0 sm:px-4',
+                        active ? 'bg-brand-soft/50' : 'hover:bg-muted/60',
+                        dragId === topic.id && 'opacity-40',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'absolute inset-y-2 left-0 w-[3px] rounded-r-full transition',
+                          active ? 'bg-brand' : 'bg-transparent',
+                        )}
+                      />
+                      <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-ink-3/60 active:cursor-grabbing" aria-label="Tartibni o'zgartirish" />
+                      <span className="w-5 shrink-0 text-right font-mono text-[10.5px] font-semibold text-ink-3">
+                        {String(subjectFilter === 'all' ? index + 1 : topic.order).padStart(2, '0')}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              'truncate font-geist text-[13px] font-semibold',
+                              active ? 'text-brand-text' : 'text-ink',
+                            )}
+                          >
+                            {topic.name}
+                          </span>
+                          {topic.proOnly ? (
+                            <span className="shrink-0 rounded bg-[#ede9fe] px-1 py-0.5 font-geist text-[8.5px] font-bold leading-none text-[#6d28d9]">
+                              PRO
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2.5 font-geist text-[10.5px] font-medium text-ink-3">
+                          <span className="inline-flex items-center gap-1">
+                            <VideoIcon className="h-3 w-3" /> {counts.videoCount.get(topic.id) ?? 0}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <FileQuestion className="h-3 w-3" /> {counts.testCount.get(topic.id) ?? 0}
+                          </span>
+                          <span className="truncate text-ink-3/80">{subject?.nameUz}</span>
+                        </div>
+                      </div>
+                      <span className={cn('hidden h-1.5 w-1.5 shrink-0 rounded-full sm:block', statusMeta.dot)} />
+                      <div
+                        className="shrink-0"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
                         <Dropdown
                           trigger={
                             <button
                               type="button"
                               aria-label="Amallar"
-                              className="grid h-7 w-7 place-items-center rounded-md text-ink-3 hover:bg-hover"
+                              className="grid h-10 w-8 place-items-center rounded-lg text-ink-3 transition hover:bg-white hover:text-ink"
                             >
-                              <MoreVertical className="h-3.5 w-3.5" />
+                              <MoreVertical className="h-4 w-4" />
                             </button>
                           }
                           items={[
                             {
-                              label: "Ko'rish",
-                              icon: <Eye className="h-3.5 w-3.5" />,
-                              onClick: () => setDrawerId(topic.id),
-                            },
-                            {
                               label: 'Tahrirlash',
                               icon: <Pencil className="h-3.5 w-3.5" />,
-                              onClick: () => setDrawerId(topic.id),
+                              onClick: () => openTopic(topic.id),
                             },
+                            {
+                              label: 'PDF import',
+                              icon: <Sparkles className="h-3.5 w-3.5" />,
+                              onClick: () => {
+                                window.location.href = `/admin/content/import?topic=${topic.id}`
+                              },
+                            },
+                            { separator: true, label: 'sep' },
                             {
                               label: "O'chirish",
                               danger: true,
@@ -277,66 +369,127 @@ export default function TopicsPage() {
                           ]}
                         />
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center justify-between border-t border-line-2 px-4 py-2 font-geist text-[11px] font-medium text-ink-3">
+              <span>
+                {number(filtered.length)} mavzu
+                {subjectFilter !== 'all' ? ` · ${subjectName(subjectFilter)}` : ''}
+              </span>
+              <span className="hidden items-center gap-1 sm:inline-flex">
+                <GripVertical className="h-3 w-3" /> sudrab tartiblang
+              </span>
+            </div>
+          </section>
+
+          <aside className="hidden min-h-0 flex-col overflow-hidden rounded-[20px] border border-line bg-white xl:flex">
+            {selectedTopic ? (
+              <TopicDetail
+                key={selectedTopic.id}
+                topic={selectedTopic}
+                onDelete={() => setDeleteTarget(selectedTopic)}
+              />
+            ) : (
+              <div className="grid h-full place-items-center px-6 text-center">
+                <div>
+                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-muted text-ink-3">
+                    <Layers className="h-5 w-5" />
+                  </span>
+                  <p className="mt-3 font-geist text-[13px] font-semibold text-ink">Mavzu tanlanmagan</p>
+                  <p className="mt-1 font-geist text-[11.5px] text-ink-3">
+                    Chapdagi ro'yxatdan mavzuni tanlang — kontenti shu yerda ochiladi.
+                  </p>
+                </div>
+              </div>
+            )}
+          </aside>
+        </div>
+
+        <Drawer
+          open={Boolean(drawerTopic)}
+          onClose={() => setDrawerId(null)}
+          title={drawerTopic?.name ?? 'Mavzu'}
+          subtitle={drawerTopic ? `${subjectName(drawerTopic.subjectId)} · ${STATUS[drawerTopic.status].label}` : undefined}
+          widthClass="sm:w-[560px]"
+        >
+          {drawerTopic ? (
+            <TopicDetail
+              key={drawerTopic.id}
+              topic={drawerTopic}
+              embedded
+              onDelete={() => setDeleteTarget(drawerTopic)}
+            />
+          ) : null}
+        </Drawer>
+
+        <NewTopicModal
+          open={newOpen}
+          onClose={() => setNewOpen(false)}
+          defaultSubjectId={subjectFilter !== 'all' ? subjectFilter : undefined}
+          onCreate={(topic) => {
+            upsertTopic(topic)
+            setNewOpen(false)
+            if (subjectFilter !== 'all' && topic.subjectId !== subjectFilter) setSubjectFilter('all')
+            setStatus('all')
+            setSearch('')
+            openTopic(topic.id)
+            toast({ title: "Mavzu qo'shildi", description: topic.name, tone: 'success' })
+          }}
+        />
+
+        <Modal
+          open={Boolean(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+          title="Mavzuni o'chirish"
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+                Bekor qilish
+              </Button>
+              <Button
+                variant="destructive"
+                className="h-11 sm:h-10"
+                onClick={() => {
+                  if (!deleteTarget) return
+                  deleteTopic(deleteTarget.id)
+                  toast({ title: "Mavzu o'chirildi", description: deleteTarget.name, tone: 'success' })
+                  setDeleteTarget(null)
+                  setDrawerId(null)
+                }}
+              >
+                <Trash2 className="h-4 w-4" /> O'chirish
+              </Button>
+            </>
+          }
+        >
+          <p className="text-[13px] text-ink-2">
+            <span className="font-semibold">{deleteTarget?.name}</span> mavzusi, unga tegishli videolar va testlar
+            o'chiriladi.
+          </p>
+        </Modal>
       </div>
-      <p className="mt-2 text-[11px] text-ink-3">
-        ≡ belgisidan ushlab qatorlarni sudrab, mavzu tartibini o'zgartirish mumkin.
-      </p>
-
-      <Drawer
-        open={Boolean(drawerTopic)}
-        onClose={() => setDrawerId(null)}
-        title="Mavzu tahrirlash"
-        subtitle={drawerTopic ? subjectName(drawerTopic.subjectId) : undefined}
-        widthClass="sm:w-[560px]"
-      >
-        {drawerTopic ? <TopicDrawer key={drawerTopic.id} topic={drawerTopic} onClose={() => setDrawerId(null)} /> : null}
-      </Drawer>
-
-      <Modal
-        open={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        title="Mavzuni o'chirish"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
-              Bekor qilish
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (!deleteTarget) return
-                deleteTopic(deleteTarget.id)
-                toast({ title: "Mavzu o'chirildi", description: deleteTarget.name, tone: 'success' })
-                setDeleteTarget(null)
-                setDrawerId(null)
-              }}
-            >
-              <Trash2 className="h-4 w-4" /> O'chirish
-            </Button>
-          </>
-        }
-      >
-        <p className="text-[13px] text-ink-2">
-          <span className="font-semibold">{deleteTarget?.name}</span> mavzusi, unga tegishli videolar va testlar
-          o'chiriladi.
-        </p>
-      </Modal>
     </PageTransition>
   )
 }
 
 type TopicTab = 'main' | 'videos' | 'tests' | 'stats'
 
-function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) {
+function TopicDetail({
+  topic,
+  embedded = false,
+  onDelete,
+}: {
+  topic: Topic
+  embedded?: boolean
+  onDelete: () => void
+}) {
   const subjects = useAppStore((state) => state.subjects)
+  const topics = useAppStore((state) => state.topics)
   const videos = useAppStore((state) => state.videos)
   const tests = useAppStore((state) => state.tests)
   const upsertTopic = useAppStore((state) => state.upsertTopic)
@@ -348,11 +501,16 @@ function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) 
   const { toast } = useToast()
 
   const [tab, setTab] = useState<TopicTab>('main')
+  const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(topic)
   const [videoOpen, setVideoOpen] = useState(false)
   const [testOpen, setTestOpen] = useState(false)
   const [testPage, setTestPage] = useState(1)
   const [dragVideoId, setDragVideoId] = useState<string | null>(null)
+
+  const subject = subjects.find((item) => item.id === topic.subjectId)
+  const tone = toneOf(subject?.color)
+  const statusMeta = STATUS[topic.status]
 
   const topicVideos = useMemo(
     () => videos.filter((video) => video.topicId === topic.id).sort((left, right) => left.order - right.order),
@@ -365,14 +523,21 @@ function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) 
   const testPageCount = Math.max(1, Math.ceil(topicTests.length / 10))
   const visibleTests = topicTests.slice((testPage - 1) * 10, testPage * 10)
 
+  const peers = useMemo(
+    () => topics.filter((item) => item.subjectId === topic.subjectId && item.id !== topic.id && item.views > 0),
+    [topics, topic.subjectId, topic.id],
+  )
+  const peerAverage = peers.length ? peers.reduce((sum, item) => sum + item.views, 0) / peers.length : 0
+  const peerDelta = peerAverage ? ((topic.views - peerAverage) / peerAverage) * 100 : 0
+
   const save = () => {
     if (!form.name.trim()) {
       toast({ title: 'Mavzu nomini kiriting', tone: 'warning' })
       return
     }
-    upsertTopic(form)
-    toast({ title: 'Mavzu saqlandi', description: form.name, tone: 'success' })
-    onClose()
+    upsertTopic({ ...form, name: form.name.trim(), description: form.description.trim() })
+    toast({ title: 'Mavzu saqlandi', description: form.name.trim(), tone: 'success' })
+    setEditing(false)
   }
 
   const moveVideo = (targetId: string) => {
@@ -386,93 +551,289 @@ function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) 
     toast({ title: 'Video tartibi yangilandi', description: dragged.name, tone: 'success' })
   }
 
-  return (
-    <div>
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        items={[
-          { value: 'main', label: 'Asosiy' },
-          { value: 'videos', label: 'Videolar', count: topicVideos.length },
-          { value: 'tests', label: 'Testlar', count: topicTests.length },
-          { value: 'stats', label: 'Statistika' },
-        ]}
-      />
+  const tabs: Array<{ value: TopicTab; label: string; count?: number }> = [
+    { value: 'main', label: 'Asosiy' },
+    { value: 'videos', label: 'Videolar', count: topicVideos.length },
+    { value: 'tests', label: 'Testlar', count: topicTests.length },
+    { value: 'stats', label: 'Statistika' },
+  ]
 
-      <div className="pt-4">
-        {tab === 'main' ? (
-          <div className="space-y-4">
-            <Field label="Fan" required>
-              <Select value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })}>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.nameUz}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Mavzu nomi" required>
-              <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-            </Field>
-            <Field label="Tavsif">
-              <Textarea
-                value={form.description}
-                onChange={(event) => setForm({ ...form, description: event.target.value })}
-                rows={3}
+  return (
+    <div className={cn('flex flex-col', embedded ? 'min-h-full' : 'h-full min-h-0')}>
+      {embedded ? (
+        <div className="flex shrink-0 items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-geist text-[10px] font-bold', statusMeta.soft, statusMeta.text)}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', statusMeta.dot)} /> {statusMeta.label}
+            </span>
+            {topic.proOnly ? <Badge tone="violet">PRO</Badge> : null}
+            <span className="font-geist text-[11px] text-ink-3">#{topic.order} · {date(topic.createdAt)}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setTab('main')
+                setEditing(true)
+              }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-2.5 font-geist text-[12px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Tahrirlash
+            </button>
+            <Dropdown
+              trigger={
+                <button
+                  type="button"
+                  aria-label="Amallar"
+                  className="grid h-9 w-9 place-items-center rounded-[9px] border border-line text-ink-3 transition hover:text-ink"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              }
+              items={[
+                {
+                  label: "O'chirish",
+                  danger: true,
+                  icon: <Trash2 className="h-3.5 w-3.5" />,
+                  onClick: onDelete,
+                },
+              ]}
+            />
+          </div>
+        </div>
+      ) : (
+        <header className="shrink-0 border-b border-line-2 px-4 pb-3 pt-4">
+          <div className="flex items-start gap-2.5">
+            <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-[13px] font-geist text-[16px] font-extrabold', tone.soft, tone.text)}>
+              {subject?.icon || subject?.nameUz.slice(0, 1) || 'M'}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2 className="truncate font-geist text-[15px] font-bold tracking-[-0.01em] text-ink">{topic.name}</h2>
+                <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-geist text-[9.5px] font-bold uppercase tracking-[0.05em]', statusMeta.soft, statusMeta.text)}>
+                  <span className={cn('h-1 w-1 rounded-full', statusMeta.dot)} /> {statusMeta.label}
+                </span>
+                {topic.proOnly ? <Badge tone="violet">PRO</Badge> : null}
+              </div>
+              <p className="mt-1 font-geist text-[11px] text-ink-3">
+                {subject?.nameUz ?? '—'} · #{topic.order} · {date(topic.createdAt)}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setTab('main')
+                  setEditing(true)
+                }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-2.5 font-geist text-[12px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                <span className="hidden 2xl:inline">Tahrirlash</span>
+              </button>
+              <Dropdown
+                trigger={
+                  <button
+                    type="button"
+                    aria-label="Amallar"
+                    className="grid h-9 w-9 place-items-center rounded-[9px] border border-line text-ink-3 transition hover:text-ink"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                }
+                items={[
+                  {
+                    label: 'PDF import',
+                    icon: <Sparkles className="h-3.5 w-3.5" />,
+                    onClick: () => {
+                      window.location.href = `/admin/content/import?topic=${topic.id}`
+                    },
+                  },
+                  { separator: true, label: 'sep' },
+                  {
+                    label: "O'chirish",
+                    danger: true,
+                    icon: <Trash2 className="h-3.5 w-3.5" />,
+                    onClick: onDelete,
+                  },
+                ]}
               />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Tartib raqami">
-                <Input
+            </div>
+          </div>
+
+          <TopicTabs className="mt-3" tabs={tabs} value={tab} onChange={setTab} />
+        </header>
+      )}
+
+      {embedded ? <TopicTabs className="mt-3" tabs={tabs} value={tab} onChange={setTab} /> : null}
+
+      <div className={cn('min-h-0 flex-1 px-4 py-3.5', embedded ? 'overflow-visible' : 'overflow-y-auto')}>
+        {tab === 'main' ? (
+          editing ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Fan</span>
+                  <select
+                    value={form.subjectId}
+                    onChange={(event) => setForm({ ...form, subjectId: event.target.value })}
+                    className={fieldClass}
+                  >
+                    {subjects.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.nameUz}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Status</span>
+                  <select
+                    value={form.status}
+                    onChange={(event) => setForm({ ...form, status: event.target.value as ContentStatus })}
+                    className={fieldClass}
+                  >
+                    <option value="active">Faol</option>
+                    <option value="draft">Draft</option>
+                    <option value="hidden">Yashirin</option>
+                  </select>
+                </label>
+              </div>
+              <label className="block">
+                <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">
+                  Mavzu nomi <span className="text-error">*</span>
+                </span>
+                <input
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  className={fieldClass}
+                  placeholder="Mavzu nomi"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Tavsif</span>
+                <textarea
+                  value={form.description}
+                  onChange={(event) => setForm({ ...form, description: event.target.value })}
+                  rows={3}
+                  className={cn(fieldClass, 'h-auto resize-none py-2.5 leading-relaxed')}
+                  placeholder="Mavzu haqida qisqacha"
+                />
+              </label>
+              <label className="block sm:max-w-[50%]">
+                <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Tartib raqami</span>
+                <input
                   type="number"
                   min={1}
                   value={form.order}
                   onChange={(event) => setForm({ ...form, order: Number(event.target.value) })}
+                  className={fieldClass}
                 />
-              </Field>
-              <Field label="Status">
-                <Select
-                  value={form.status}
-                  onChange={(event) => setForm({ ...form, status: event.target.value as ContentStatus })}
-                >
-                  <option value="active">Faol</option>
-                  <option value="draft">Draft</option>
-                  <option value="hidden">Yashirin</option>
-                </Select>
-              </Field>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-line px-3 py-2.5">
-              <div>
-                <p className="text-[12.5px] font-semibold text-ink">Faqat Pro uchun</p>
-                <p className="text-[11px] text-ink-3">Bepul foydalanuvchilar bu mavzuni ko'ra olmaydi</p>
+              </label>
+              <div className="flex items-center justify-between gap-3 rounded-[10px] border border-line px-3 py-2.5">
+                <div>
+                  <p className="font-geist text-[12px] font-semibold text-ink">Faqat Pro foydalanuvchilar uchun</p>
+                  <p className="font-geist text-[10.5px] text-ink-3">Bepul foydalanuvchilar bu mavzuni ko'rmaydi</p>
+                </div>
+                <Switch checked={form.proOnly} onChange={(value) => setForm({ ...form, proOnly: value })} size="sm" />
               </div>
-              <Switch checked={form.proOnly} onChange={(value) => setForm({ ...form, proOnly: value })} />
+              <div className="flex items-center justify-end gap-2 border-t border-line-2 pt-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setForm(topic)
+                    setEditing(false)
+                  }}
+                >
+                  Bekor qilish
+                </Button>
+                <Button className="h-11 sm:h-10" onClick={save}>
+                  Saqlash
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center justify-end gap-2 border-t border-line-2 pt-3">
-              <Button variant="ghost" onClick={onClose}>
-                Bekor qilish
-              </Button>
-              <Button onClick={save}>Saqlash</Button>
+          ) : (
+            <div className="space-y-3">
+              <p className={cn('rounded-[12px] px-3 py-2.5 font-geist text-[12px] leading-relaxed', topic.description ? 'bg-muted/70 text-ink-2' : 'bg-muted/50 text-ink-3')}>
+                {topic.description || 'Tavsif kiritilmagan — Tahrirlash orqali qo\'shing.'}
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setTab('videos')}
+                  className="rounded-[12px] border border-line-2 bg-white p-3 text-left transition hover:border-line-brand"
+                >
+                  <span className="flex items-center gap-1.5 font-geist text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3">
+                    <VideoIcon className="h-3.5 w-3.5" /> Videolar
+                  </span>
+                  <span className="mt-1.5 block font-geist text-[20px] font-extrabold leading-none tabular text-ink">
+                    {topicVideos.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab('tests')}
+                  className="rounded-[12px] border border-line-2 bg-white p-3 text-left transition hover:border-line-brand"
+                >
+                  <span className="flex items-center gap-1.5 font-geist text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3">
+                    <FileQuestion className="h-3.5 w-3.5" /> Testlar
+                  </span>
+                  <span className="mt-1.5 block font-geist text-[20px] font-extrabold leading-none tabular text-ink">
+                    {topicTests.length}
+                  </span>
+                </button>
+                <div className="rounded-[12px] border border-line-2 bg-white p-3">
+                  <span className="flex items-center gap-1.5 font-geist text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3">
+                    <Eye className="h-3.5 w-3.5" /> Ko'rishlar
+                  </span>
+                  <span className="mt-1.5 block font-geist text-[20px] font-extrabold leading-none tabular text-ink">
+                    {number(topic.views)}
+                  </span>
+                </div>
+                <div className="rounded-[12px] border border-line-2 bg-white p-3">
+                  <span className="flex items-center gap-1.5 font-geist text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3">
+                    <BarChart3 className="h-3.5 w-3.5" /> Test topshirganlar
+                  </span>
+                  <span className="mt-1.5 block font-geist text-[20px] font-extrabold leading-none tabular text-ink">
+                    {number(topic.testTakers)}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-[12px] border border-dashed border-line px-3 py-2.5 font-geist text-[11px] leading-relaxed text-ink-3">
+                Video va testlarni yuqoridagi bo'limlardan boshqaring. PDF fayldan testlarni avtomatik ajratish uchun{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = `/admin/content/import?topic=${topic.id}`
+                  }}
+                  className="font-semibold text-brand-text hover:underline"
+                >
+                  PDF import
+                </button>{' '}
+                dan foydalaning.
+              </div>
             </div>
-          </div>
+          )
         ) : null}
 
         {tab === 'videos' ? (
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[12.5px] text-ink-3">
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-geist text-[11.5px] text-ink-3">
                 {topicVideos.length} ta video · sudrab tartiblang
               </p>
-              <Button size="sm" onClick={() => setVideoOpen(true)}>
-                <Plus className="h-3.5 w-3.5" /> Video qo'shish
+              <Button size="sm" className="h-9" onClick={() => setVideoOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> Qo'shish
               </Button>
             </div>
             {topicVideos.length === 0 ? (
-              <EmptyState
-                title="Videolar yo'q"
-                text="Bu mavzuga birinchi videoni qo'shing."
-                icon={<VideoIcon className="h-5 w-5" />}
-              />
+              <div className="rounded-[12px] border border-dashed border-line px-4 py-8">
+                <EmptyState
+                  title="Videolar yo'q"
+                  text="Bu mavzuga birinchi videoni qo'shing."
+                  icon={<VideoIcon className="h-5 w-5" />}
+                />
+              </div>
             ) : (
               <ul className="space-y-2">
                 {topicVideos.map((video) => (
@@ -487,34 +848,41 @@ function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) 
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={() => moveVideo(video.id)}
                     className={cn(
-                      'flex items-center gap-2.5 rounded-lg border border-line p-2 transition',
-                      dragVideoId === video.id && 'opacity-50',
+                      'flex items-center gap-2 rounded-[10px] border border-line p-2 transition',
+                      dragVideoId === video.id && 'opacity-40',
                     )}
                   >
-                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-ink-3 active:cursor-grabbing" aria-label="Tartibni o'zgartirish" />
-                    <img
-                      src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
-                      alt={video.name}
-                      className="h-11 w-20 shrink-0 rounded-md object-cover"
-                      loading="lazy"
-                    />
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-ink-3/60 active:cursor-grabbing" aria-label="Tartibni o'zgartirish" />
+                    <div className="relative shrink-0">
+                      <img
+                        src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
+                        alt={video.name}
+                        className="h-10 w-[72px] rounded-md bg-muted object-cover"
+                        loading="lazy"
+                      />
+                      <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 font-geist text-[8px] font-semibold text-white">
+                        {video.duration}
+                      </span>
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12.5px] font-semibold text-ink">{video.name}</p>
-                      <p className="truncate text-[10.5px] text-ink-3">
-                        youtube.com/watch?v={video.youtubeId} · {video.duration}
+                      <p className="truncate font-geist text-[12px] font-semibold text-ink">{video.name}</p>
+                      <p className="mt-0.5 flex items-center gap-1 font-geist text-[10px] text-ink-3">
+                        <span className={cn('h-1.5 w-1.5 rounded-full', STATUS[video.status].dot)} />
+                        {STATUS[video.status].label}
+                        {video.proOnly ? ' · PRO' : ''}
                       </p>
                     </div>
-                    <Badge tone={video.status === 'active' ? 'success' : 'warning'}>{statusLabel[video.status]}</Badge>
-                    <IconButton
-                      label="O'chirish"
+                    <button
+                      type="button"
+                      aria-label="Videoni o'chirish"
                       onClick={() => {
                         deleteVideo(video.id)
                         toast({ title: "Video o'chirildi", tone: 'success' })
                       }}
-                      className="text-error hover:bg-error-bg"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink-3 transition hover:bg-error-bg hover:text-error"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </IconButton>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -524,78 +892,100 @@ function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) 
 
         {tab === 'tests' ? (
           <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
               <Link href={`/admin/content/import?topic=${topic.id}`}>
-                <Button size="sm" variant="secondary">
-                  <FileQuestion className="h-3.5 w-3.5" /> PDF import
+                <Button size="sm" variant="secondary" className="h-9">
+                  <Sparkles className="h-3.5 w-3.5" /> PDF import
                 </Button>
               </Link>
-              <Button size="sm" onClick={() => setTestOpen(true)}>
+              <Button size="sm" className="h-9" onClick={() => setTestOpen(true)}>
                 <Plus className="h-3.5 w-3.5" /> Test qo'shish
               </Button>
             </div>
             {topicTests.length === 0 ? (
-              <EmptyState title="Testlar yo'q" text="PDF import yoki qo'lda test qo'shing." icon={<FileQuestion className="h-5 w-5" />} />
+              <div className="rounded-[12px] border border-dashed border-line px-4 py-8">
+                <EmptyState
+                  title="Testlar yo'q"
+                  text="PDF import yoki qo'lda test qo'shing."
+                  icon={<FileQuestion className="h-5 w-5" />}
+                />
+              </div>
             ) : (
               <>
                 <ul className="space-y-2">
                   {visibleTests.map((test, index) => (
-                    <li key={test.id} className="rounded-lg border border-line p-2.5">
+                    <li key={test.id} className="rounded-[10px] border border-line px-2.5 py-2">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-[12px] font-medium text-ink">
+                        <p className="line-clamp-2 font-geist text-[11.5px] font-medium leading-snug text-ink">
                           <span className="mr-1 text-ink-3">{(testPage - 1) * 10 + index + 1}.</span>
                           {test.question}
                         </p>
-                        <IconButton
-                          label="O'chirish"
+                        <button
+                          type="button"
+                          aria-label="Testni o'chirish"
                           onClick={() => {
                             deleteTest(test.id)
                             toast({ title: "Test o'chirildi", tone: 'success' })
+                            setTestPage((page) => Math.min(page, Math.max(1, Math.ceil((topicTests.length - 1) / 10))))
                           }}
-                          className="text-error hover:bg-error-bg"
+                          className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-3 transition hover:bg-error-bg hover:text-error"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </IconButton>
+                        </button>
                       </div>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {(['a', 'b', 'c', 'd'] as const).map((key) => (
-                          <span
-                            key={key}
-                            className={cn(
-                              'rounded border px-1.5 py-0.5 text-[10.5px]',
-                              test.correct === key
-                                ? 'border-brand bg-brand-soft font-semibold text-brand-text'
-                                : 'border-line text-ink-3',
-                            )}
-                          >
-                            {key.toUpperCase()}) {test.options[key]}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <span className="text-[10.5px] text-ink-3">
-                          To'g'ri javob: <span className="font-semibold text-brand-text">{test.correct.toUpperCase()}</span>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-geist text-[10px] text-ink-3">
+                        <span>
+                          To'g'ri:{' '}
+                          <span className="font-bold text-brand-text">{test.correct.toUpperCase()}</span>
+                          <span className="text-ink-3"> — {test.options[test.correct]}</span>
                         </span>
-                        <DifficultyBadge level={test.difficulty} />
+                        <Badge
+                          tone={
+                            test.difficulty === 'easy'
+                              ? 'success'
+                              : test.difficulty === 'medium'
+                                ? 'warning'
+                                : test.difficulty === 'hard'
+                                  ? 'danger'
+                                  : 'info'
+                          }
+                          className="px-1.5 py-0 text-[9.5px]"
+                        >
+                          {test.difficulty === 'easy'
+                            ? 'Oson'
+                            : test.difficulty === 'medium'
+                              ? "O'rta"
+                              : test.difficulty === 'hard'
+                                ? 'Qiyin'
+                                : 'Olimpiada'}
+                        </Badge>
                       </div>
                     </li>
                   ))}
                 </ul>
-                <div className="mt-3 flex items-center justify-between text-[11px] text-ink-3">
-                  <span>
+                <div className="mt-2.5 flex items-center justify-between font-geist text-[10.5px] text-ink-3">
+                  <span className="tabular">
                     {(testPage - 1) * 10 + 1}–{Math.min(testPage * 10, topicTests.length)} / {topicTests.length}
                   </span>
                   <div className="flex items-center gap-1">
-                    <IconButton label="Oldingi" onClick={() => setTestPage((page) => Math.max(1, page - 1))} className="border border-line">
+                    <button
+                      type="button"
+                      aria-label="Oldingi"
+                      disabled={testPage === 1}
+                      onClick={() => setTestPage((page) => Math.max(1, page - 1))}
+                      className="grid h-8 w-8 place-items-center rounded-md border border-line text-ink-3 transition hover:text-ink disabled:opacity-40"
+                    >
                       <ChevronLeft className="h-3.5 w-3.5" />
-                    </IconButton>
-                    <IconButton
-                      label="Keyingi"
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Keyingi"
+                      disabled={testPage >= testPageCount}
                       onClick={() => setTestPage((page) => Math.min(testPageCount, page + 1))}
-                      className="border border-line"
+                      className="grid h-8 w-8 place-items-center rounded-md border border-line text-ink-3 transition hover:text-ink disabled:opacity-40"
                     >
                       <ChevronRight className="h-3.5 w-3.5" />
-                    </IconButton>
+                    </button>
                   </div>
                 </div>
               </>
@@ -604,41 +994,44 @@ function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) 
         ) : null}
 
         {tab === 'stats' ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <div className="grid grid-cols-2 gap-2.5">
               {[
-                { label: 'Ko\'rishlar', value: number(form.views) },
-                { label: "O'rtacha vaqt", value: `${form.avgMinutes} daqiqa` },
-                { label: 'Test topshirganlar', value: `${number(form.testTakers)} ta` },
-                { label: "O'rtacha ball", value: `${form.avgScore.toFixed(1)}/10` },
+                { label: "Ko'rishlar", value: number(topic.views) },
+                { label: "O'rtacha vaqt", value: `${topic.avgMinutes} daqiqa` },
+                { label: 'Test topshirganlar', value: `${number(topic.testTakers)} ta` },
+                { label: "O'rtacha ball", value: `${topic.avgScore.toFixed(1)}/10` },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg border border-line-2 bg-canvas p-3">
-                  <p className="text-[10.5px] uppercase tracking-[0.04em] text-ink-3">{item.label}</p>
-                  <p className="mt-1 font-display text-[17px] font-bold text-ink">{item.value}</p>
+                <div key={item.label} className="rounded-[12px] border border-line-2 bg-canvas p-3">
+                  <p className="font-geist text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3">{item.label}</p>
+                  <p className="mt-1 font-geist text-[17px] font-extrabold tabular text-ink">{item.value}</p>
                 </div>
               ))}
             </div>
-            <div className="rounded-xl border border-line p-3.5">
-              <div className="flex items-center justify-between text-[12px]">
+            <div className="rounded-[12px] border border-line p-3">
+              <div className="flex items-center justify-between font-geist text-[11.5px]">
                 <span className="text-ink-2">Testni yakunlash darajasi</span>
-                <span className="font-semibold text-ink">
-                  {percent(form.views ? (form.testTakers / form.views) * 100 : 0)}
+                <span className="font-bold text-ink">
+                  {percent(topic.views ? (topic.testTakers / topic.views) * 100 : 0)}
                 </span>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-brand-container">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-brand"
-                  style={{ width: `${Math.min(100, form.views ? (form.testTakers / form.views) * 100 : 0)}%` }}
+                  className="h-full rounded-full bg-brand transition-[width] duration-300"
+                  style={{ width: `${Math.min(100, topic.views ? (topic.testTakers / topic.views) * 100 : 0)}%` }}
                 />
               </div>
-              <p className="mt-2 text-[11px] text-ink-3">
-                {number(form.testTakers)} nafar o'quvchi testni boshlagan, o'rtacha natija {form.avgScore.toFixed(1)} ball.
+              <p className="mt-2 font-geist text-[10.5px] leading-relaxed text-ink-3">
+                {number(topic.testTakers)} nafar o'quvchi testni boshlagan, o'rtacha natija {topic.avgScore.toFixed(1)} ball.
               </p>
             </div>
-            <div className="rounded-lg bg-warning-bg px-3 py-2 text-[11.5px] text-warning">
-              Ko'rishlar {number(form.views)} — fan bo'yicha o'rtacha ko'rsatkichdan{' '}
-              {form.views > 3000 ? 'yuqori' : 'past'}.
-            </div>
+            {peers.length > 0 ? (
+              <div className="rounded-[12px] bg-muted/70 px-3 py-2.5 font-geist text-[11px] leading-relaxed text-ink-2">
+                {subject?.nameUz ?? 'Fan'} bo'yicha o'rtacha {number(peerAverage)} ko'rish. Bu mavzu o'rtachadan{' '}
+                <span className="font-bold text-ink">{percent(Math.abs(peerDelta))}</span>{' '}
+                {peerDelta >= 0 ? 'yuqori' : 'past'}.
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -662,9 +1055,170 @@ function TopicDrawer({ topic, onClose }: { topic: Topic; onClose: () => void }) 
           upsertTest(test)
           toast({ title: "Test qo'shildi", tone: 'success' })
           setTestOpen(false)
+          setTestPage(Math.max(1, Math.ceil((topicTests.length + 1) / 10)))
         }}
       />
     </div>
+  )
+}
+
+function TopicTabs({
+  tabs,
+  value,
+  onChange,
+  className,
+}: {
+  tabs: Array<{ value: TopicTab; label: string; count?: number }>
+  value: TopicTab
+  onChange: (value: TopicTab) => void
+  className?: string
+}) {
+  return (
+    <div className={cn('no-scrollbar flex shrink-0 items-center gap-4 overflow-x-auto border-b border-line-2', className)}>
+      {tabs.map((item) => {
+        const active = item.value === value
+        return (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onChange(item.value)}
+            className={cn(
+              'relative shrink-0 pb-2 pt-1 font-geist text-[11.5px] font-semibold transition',
+              active ? 'text-brand-text' : 'text-ink-3 hover:text-ink',
+            )}
+          >
+            <span className="flex items-center gap-1.5">
+              {item.label}
+              {typeof item.count === 'number' ? (
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 py-0.5 text-[9.5px] font-bold tabular',
+                    active ? 'bg-brand-soft text-brand-text' : 'bg-muted text-ink-3',
+                  )}
+                >
+                  {item.count}
+                </span>
+              ) : null}
+            </span>
+            {active ? <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-brand" /> : null}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function NewTopicModal({
+  open,
+  onClose,
+  defaultSubjectId,
+  onCreate,
+}: {
+  open: boolean
+  onClose: () => void
+  defaultSubjectId?: string
+  onCreate: (topic: Topic) => void
+}) {
+  const subjects = useAppStore((state) => state.subjects)
+  const topics = useAppStore((state) => state.topics)
+  const [subjectId, setSubjectId] = useState(defaultSubjectId ?? subjects[0]?.id ?? '')
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) {
+      setName('')
+      setDescription('')
+      setError('')
+      setSubjectId(defaultSubjectId ?? subjects[0]?.id ?? '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultSubjectId])
+
+  const submit = () => {
+    if (!name.trim()) {
+      setError('Mavzu nomini kiriting')
+      return
+    }
+    if (!subjectId) {
+      setError('Avval fan yarating')
+      return
+    }
+    const order = topics.filter((topic) => topic.subjectId === subjectId).length + 1
+    onCreate({
+      id: `topic-${Date.now().toString(36)}`,
+      subjectId,
+      name: name.trim(),
+      description: description.trim(),
+      order,
+      status: 'draft',
+      proOnly: false,
+      views: 0,
+      avgMinutes: 0,
+      testTakers: 0,
+      avgScore: 0,
+      createdAt: new Date().toISOString(),
+    })
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Yangi mavzu"
+      description="Mavzuni fanga bog'lang — keyin videolar va testlar qo'shasiz."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Bekor qilish
+          </Button>
+          <Button className="h-11 sm:h-10" onClick={submit}>
+            Yaratish
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <label className="block">
+          <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">
+            Fan <span className="text-error">*</span>
+          </span>
+          <select value={subjectId} onChange={(event) => setSubjectId(event.target.value)} className={fieldClass}>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.nameUz}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">
+            Mavzu nomi <span className="text-error">*</span>
+          </span>
+          <input
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value)
+              setError('')
+            }}
+            placeholder="Masalan: Kvadrat tenglamalar"
+            className={cn(fieldClass, error && 'border-error')}
+          />
+          {error ? <span className="mt-1 block font-geist text-[11px] font-medium text-error">{error}</span> : null}
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Tavsif</span>
+          <textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            rows={3}
+            placeholder="Mavzu haqida qisqacha"
+            className={cn(fieldClass, 'h-auto resize-none py-2.5 leading-relaxed')}
+          />
+        </label>
+      </div>
+    </Modal>
   )
 }
 
@@ -689,6 +1243,7 @@ function AddVideoModal({
   const [status, setStatus] = useState<ContentStatus>('active')
 
   const youtubeId = youtubeIdFrom(url)
+  const validId = /^[A-Za-z0-9_-]{11}$/.test(youtubeId)
 
   useEffect(() => {
     if (!open) {
@@ -697,11 +1252,12 @@ function AddVideoModal({
       setDuration('')
       setProOnly(false)
       setStatus('active')
+      setOrder(defaultOrder)
     }
-  }, [open])
+  }, [open, defaultOrder])
 
   const submit = () => {
-    if (!url.trim() || !name.trim()) return
+    if (!name.trim() || !validId) return
     onSave({
       id: `video-${Date.now().toString(36)}`,
       topicId,
@@ -721,55 +1277,91 @@ function AddVideoModal({
       open={open}
       onClose={onClose}
       title="Video qo'shish"
+      description="YouTube havolasini qo'ying — thumbnail avtomatik olinadi."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Bekor qilish
           </Button>
-          <Button onClick={submit} disabled={!url.trim() || !name.trim()}>
+          <Button className="h-11 sm:h-10" onClick={submit} disabled={!name.trim() || !validId}>
             Saqlash
           </Button>
         </>
       }
     >
-      <div className="space-y-3.5">
-        <Field label="YouTube URL" required hint="Havolani qo'yganda thumbnail avtomatik yuklanadi">
-          <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://youtube.com/watch?v=..." />
-        </Field>
+      <div className="space-y-3">
+        <label className="block">
+          <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">YouTube URL</span>
+          <input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="https://youtube.com/watch?v=..."
+            className={fieldClass}
+          />
+        </label>
         {url ? (
-          <div className="flex items-center gap-2.5 rounded-lg border border-line p-2">
+          <div className="flex items-center gap-2.5 rounded-[10px] border border-line p-2">
             <img
               src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
               alt="Preview"
-              className="h-14 w-24 rounded object-cover"
+              className="h-12 w-[86px] rounded-md object-cover"
             />
-            <div className="text-[11px] text-ink-3">
+            <div className="min-w-0 font-geist text-[11px] text-ink-3">
               <p className="font-semibold text-ink-2">YouTube preview</p>
-              <p className="font-mono">{youtubeId}</p>
+              <p className={cn('truncate font-mono', !validId && 'text-error')}>
+                {validId ? youtubeId : 'Havola noto‘g‘ri'}
+              </p>
             </div>
           </div>
         ) : null}
-        <Field label="Nomi" required>
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Video sarlavhasi" />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Davomiyligi">
-            <Input value={duration} onChange={(event) => setDuration(event.target.value)} placeholder="18:34" />
-          </Field>
-          <Field label="Tartib raqami">
-            <Input type="number" min={1} value={order} onChange={(event) => setOrder(Number(event.target.value))} />
-          </Field>
+        <label className="block">
+          <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Nomi</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Video sarlavhasi"
+            className={fieldClass}
+          />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Davomiyligi</span>
+            <input
+              value={duration}
+              onChange={(event) => setDuration(event.target.value)}
+              placeholder="18:34"
+              className={fieldClass}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Tartib raqami</span>
+            <input
+              type="number"
+              min={1}
+              value={order}
+              onChange={(event) => setOrder(Number(event.target.value))}
+              className={fieldClass}
+            />
+          </label>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Status">
-            <Select value={status} onChange={(event) => setStatus(event.target.value as ContentStatus)}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Status</span>
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as ContentStatus)}
+              className={fieldClass}
+            >
               <option value="active">Faol</option>
               <option value="draft">Draft</option>
               <option value="hidden">Yashirin</option>
-            </Select>
-          </Field>
-          <div className="flex items-end justify-between rounded-lg border border-line px-3 py-2">
-            <span className="text-[12px] font-medium text-ink-2">Faqat Pro</span>
+            </select>
+          </label>
+          <div className="flex items-end justify-between gap-2 rounded-[10px] border border-line px-3 py-2.5">
+            <div>
+              <p className="font-geist text-[12px] font-semibold text-ink">Faqat Pro</p>
+              <p className="font-geist text-[10.5px] text-ink-3">Bepul rejada berkitiladi</p>
+            </div>
             <Switch checked={proOnly} onChange={setProOnly} size="sm" />
           </div>
         </div>
@@ -805,13 +1397,14 @@ function AddTestModal({
     }
   }, [open])
 
-  const valid = question.trim() && options.a.trim() && options.b.trim() && options.c.trim() && options.d.trim()
+  const valid = Boolean(question.trim() && options.a.trim() && options.b.trim() && options.c.trim() && options.d.trim())
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Test qo'shish"
+      description="To'g'ri variantni belgilang — savol darhol mavzuga qo'shiladi."
       size="lg"
       footer={
         <>
@@ -819,6 +1412,7 @@ function AddTestModal({
             Bekor qilish
           </Button>
           <Button
+            className="h-11 sm:h-10"
             disabled={!valid}
             onClick={() =>
               onSave({
@@ -842,46 +1436,91 @@ function AddTestModal({
         </>
       }
     >
-      <div className="space-y-3.5">
-        <Field label="Savol matni" required hint="Matematik formulalar uchun LaTeX ham ishlatsa bo'ladi">
-          <Textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} placeholder="Savol..." />
-        </Field>
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {(['a', 'b', 'c', 'd'] as const).map((key) => (
-            <Field key={key} label={`Variant ${key.toUpperCase()}`} required>
-              <div className="flex items-center gap-2">
-                <Input
+      <div className="space-y-3">
+        <label className="block">
+          <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">
+            Savol matni <span className="text-error">*</span>
+          </span>
+          <textarea
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            rows={3}
+            placeholder="Savol..."
+            className={cn(fieldClass, 'h-auto resize-none py-2.5 leading-relaxed')}
+          />
+        </label>
+        <div className="space-y-2">
+          {(['a', 'b', 'c', 'd'] as const).map((key) => {
+            const isCorrect = correct === key
+            return (
+              <div
+                key={key}
+                className={cn(
+                  'flex items-center gap-2 rounded-[10px] border p-1.5 pl-2 transition',
+                  isCorrect ? 'border-brand bg-brand-soft/60' : 'border-line',
+                )}
+              >
+                <span
+                  className={cn(
+                    'grid h-7 w-7 shrink-0 place-items-center rounded-md font-geist text-[11.5px] font-bold',
+                    isCorrect ? 'bg-brand text-white' : 'bg-muted text-ink-3',
+                  )}
+                >
+                  {key.toUpperCase()}
+                </span>
+                <input
                   value={options[key]}
                   onChange={(event) => setOptions({ ...options, [key]: event.target.value })}
                   placeholder={`Variant ${key.toUpperCase()}`}
+                  className="h-10 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 font-geist text-[13px] font-medium text-ink outline-none placeholder:text-placeholder focus:border-line"
                 />
-                <Checkbox checked={correct === key} onChange={() => setCorrect(key)} label="To'g'ri" />
+                <button
+                  type="button"
+                  onClick={() => setCorrect(key)}
+                  aria-pressed={isCorrect}
+                  className={cn(
+                    'inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2 font-geist text-[10.5px] font-semibold transition',
+                    isCorrect ? 'text-brand-text' : 'text-ink-3 hover:bg-muted',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'grid h-3.5 w-3.5 place-items-center rounded-full border',
+                      isCorrect ? 'border-brand bg-brand text-white' : 'border-[#d1d5db]',
+                    )}
+                  >
+                    {isCorrect ? <span className="h-1 w-1 rounded-full bg-white" /> : null}
+                  </span>
+                  To'g'ri
+                </button>
               </div>
-            </Field>
-          ))}
+            )
+          })}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Daraja">
-            <Select value={difficulty} onChange={(event) => setDifficulty(event.target.value as TestDifficulty)}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Daraja</span>
+            <select
+              value={difficulty}
+              onChange={(event) => setDifficulty(event.target.value as TestDifficulty)}
+              className={fieldClass}
+            >
               <option value="easy">Oson</option>
               <option value="medium">O'rta</option>
               <option value="hard">Qiyin</option>
               <option value="olympiad">Olimpiada</option>
-            </Select>
-          </Field>
-          <Field label="To'g'ri javob">
-            <Select value={correct} onChange={(event) => setCorrect(event.target.value as 'a' | 'b' | 'c' | 'd')}>
-              {(['a', 'b', 'c', 'd'] as const).map((key) => (
-                <option key={key} value={key}>
-                  {key.toUpperCase()} varianti
-                </option>
-              ))}
-            </Select>
-          </Field>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block font-geist text-[12px] font-semibold text-ink-2">Izoh (admin uchun)</span>
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Ixtiyoriy"
+              className={fieldClass}
+            />
+          </label>
         </div>
-        <Field label="Izoh (admin uchun)">
-          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ixtiyoriy izoh" />
-        </Field>
       </div>
     </Modal>
   )
