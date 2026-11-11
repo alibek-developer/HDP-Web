@@ -14,11 +14,13 @@ import {
   Share2,
   Tag,
   Trash2,
+  Trophy,
   Users,
   Wallet,
 } from 'lucide-react'
-import { PageHeader, PageTransition } from '@/components/layout/Page'
+import { PageTransition } from '@/components/layout/Page'
 import {
+  Avatar,
   Badge,
   Button,
   EmptyState,
@@ -29,8 +31,6 @@ import {
   SearchInput,
   Segmented,
   Select,
-  StatCard,
-  Tabs,
   Textarea,
   cn,
   useToast,
@@ -39,6 +39,9 @@ import { useAppStore } from '@/lib/store'
 import { date, dateInput, money, number, percent } from '@/lib/format'
 import { referralStats, referrals as seedReferrals } from '@/lib/mock'
 import type { Campaign, CampaignStatus, CampaignType, PackageId, Promo, PromoStatus } from '@/lib/types'
+
+const NOW = new Date('2026-11-08T09:00:00+05:00').getTime()
+const DAY = 86_400_000
 
 const PACKAGE_LABEL: Record<'all' | PackageId, string> = {
   all: 'Barchasi',
@@ -95,6 +98,8 @@ const generateCode = () => {
   return Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')
 }
 
+const daysLeft = (expiresAt: string) => Math.ceil((new Date(expiresAt).getTime() - NOW) / DAY)
+
 export default function MarketingPage() {
   const promos = useAppStore((state) => state.promos)
   const campaigns = useAppStore((state) => state.campaigns)
@@ -126,16 +131,24 @@ export default function MarketingPage() {
     () => [...referrals].sort((left, right) => right.revenue - left.revenue),
     [referrals],
   )
+  const podium = referralRows.slice(0, 3)
+  const podiumOrder = [podium[1], podium[0], podium[2]].filter(Boolean)
+  const restRows = referralRows.slice(3)
+
+  const campaignRows = useMemo(
+    () => [...campaigns].sort((left, right) => right.startsAt.localeCompare(left.startsAt)),
+    [campaigns],
+  )
 
   const savePromo = (promo: Promo) => {
     const code = promo.code.trim().toUpperCase()
     if (!code) return toast({ title: 'Promo kodni kiriting', tone: 'warning' })
-    if (promo.amount <= 0) return toast({ title: "Chegirma miqdorini kiriting", tone: 'warning' })
+    if (promo.amount <= 0) return toast({ title: 'Chegirma miqdorini kiriting', tone: 'warning' })
     if (promo.limit <= 0) return toast({ title: 'Foydalanish limitini kiriting', tone: 'warning' })
     if (promos.some((item) => item.code === code && item.id !== promo.id)) {
       return toast({ title: 'Bu kod allaqachon mavjud', tone: 'warning' })
     }
-    const expired = new Date(promo.expiresAt).getTime() < new Date('2026-11-08T09:00:00+05:00').getTime()
+    const expired = new Date(promo.expiresAt).getTime() < NOW
     upsertPromo({
       ...promo,
       id: promo.id || `promo-${Date.now()}`,
@@ -186,323 +199,492 @@ export default function MarketingPage() {
     setDeleteCampaignTarget(null)
   }
 
-  const totalUsed = promos.reduce((total, promo) => total + promo.used, 0)
-  const activePromos = promos.filter((promo) => promo.status === 'active').length
-  const activeCampaigns = campaigns.filter((campaign) => campaign.status === 'active').length
+  const copyCode = (code: string) => {
+    navigator.clipboard
+      ?.writeText(code)
+      .then(() => toast({ title: 'Kod nusxalandi', description: code, tone: 'success' }))
+      .catch(() => toast({ title: 'Nusxalash imkonsiz', description: code, tone: 'warning' }))
+  }
 
   return (
     <PageTransition>
-      <PageHeader
-        title={
-          <span className="flex flex-wrap items-center gap-2.5">
-            Marketing <Badge tone="brand">{number(promos.length)} promo</Badge>
-          </span>
-        }
-        subtitle="Promo kodlar, referral dasturi va aksiyalarni boshqaring"
-        breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Marketing' }]}
-        actions={
-          tab === 'promos' ? (
-            <Button onClick={() => setEditingPromo({ ...EMPTY_PROMO, code: generateCode() })}>
-              <Plus className="h-4 w-4" /> Yangi kod
+      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
+              <span className="text-ink-3">Dashboard</span>
+              <span className="text-placeholder">/</span>
+              <span className="text-ink">Marketing</span>
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center gap-2">
+              <h1 className="h2 truncate text-ink">Marketing</h1>
+              <Badge tone="brand">{number(promos.length)} promo</Badge>
+            </div>
+            <p className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">
+              Promo kodlar, referral dasturi va aksiyalarni boshqaring
+            </p>
+          </div>
+          {tab === 'promos' ? (
+            <Button onClick={() => setEditingPromo({ ...EMPTY_PROMO, code: generateCode() })} className="h-10 sm:h-11">
+              <Plus className="h-4 w-4" />
+              <span className="max-[360px]:hidden">Yangi kod</span>
             </Button>
           ) : tab === 'campaigns' ? (
-            <Button onClick={() => setEditingCampaign({ ...EMPTY_CAMPAIGN })}>
-              <Plus className="h-4 w-4" /> Yangi aksiya
+            <Button onClick={() => setEditingCampaign({ ...EMPTY_CAMPAIGN })} className="h-10 sm:h-11">
+              <Plus className="h-4 w-4" />
+              <span className="max-[360px]:hidden">Yangi aksiya</span>
             </Button>
-          ) : null
-        }
-      />
+          ) : null}
+        </div>
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Faol promo kodlar" value={number(activePromos)} hint={`Jami ${number(promos.length)} ta kod`} icon={<Tag className="h-5 w-5" />} />
-        <StatCard label="Ishlatilgan" value={number(totalUsed)} hint="Barcha promo kodlar bo'yicha" icon={<BadgePercent className="h-5 w-5" />} iconClass="bg-info-bg text-info" />
-        <StatCard label="Referral kodlar" value={number(referralStats.codes)} hint={`Bu oy: ${number(referralStats.usedThisMonth)} ta`} icon={<Share2 className="h-5 w-5" />} iconClass="bg-violet-100 text-[#6d28d9]" />
-        <StatCard label="Referral daromad" value={money(referralStats.revenue)} hint="Bu oy ishlatilgan kodlar" icon={<Wallet className="h-5 w-5" />} iconClass="bg-coin-bg text-[#b45309]" />
-      </div>
+        <div className="grid shrink-0 grid-cols-3 gap-2" role="tablist" aria-label="Marketing bo'limlari">
+          {(
+            [
+              { value: 'promos', label: 'Promo kodlar', count: promos.length, icon: Tag, desc: 'Chegirma kodlari' },
+              { value: 'referrals', label: 'Referral', count: referrals.length, icon: Share2, desc: "Do'stini taklif qil" },
+              { value: 'campaigns', label: 'Aksiyalar', count: campaigns.length, icon: Megaphone, desc: 'Vaqtinchalik takliflar' },
+            ] as const
+          ).map((item) => {
+            const active = tab === item.value
+            const Icon = item.icon
+            return (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(item.value)}
+                className={cn(
+                  'flex min-w-0 items-center gap-2 rounded-[14px] border p-2 text-left transition sm:gap-2.5 sm:p-3',
+                  active
+                    ? 'border-brand/50 bg-brand-soft/60 shadow-card'
+                    : 'border-line bg-white shadow-card hover:border-line-2',
+                )}
+              >
+                <span
+                  className={cn(
+                    'grid h-8 w-8 shrink-0 place-items-center rounded-[10px] transition sm:h-9 sm:w-9',
+                    active ? 'bg-brand text-white' : 'bg-muted text-ink-3',
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-[11.5px] font-semibold leading-tight text-ink sm:text-[12.5px]">
+                    <span className="truncate">{item.label}</span>
+                    <span
+                      className={cn(
+                        'rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
+                        active ? 'bg-white text-brand-text' : 'bg-muted text-ink-3',
+                      )}
+                    >
+                      {number(item.count)}
+                    </span>
+                  </span>
+                  <span className="hidden truncate text-[10.5px] text-ink-3 sm:block">{item.desc}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
 
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        items={[
-          { value: 'promos', label: 'Promo kodlar', count: promos.length },
-          { value: 'referrals', label: 'Referral', count: referrals.length },
-          { value: 'campaigns', label: 'Aksiyalar', count: campaigns.length },
-        ]}
-        className="mb-5"
-      />
-
-      {tab === 'promos' ? (
-        <div className="card p-0">
-          <div className="flex flex-col gap-3 border-b border-line-2 p-4 sm:flex-row sm:items-center">
-            <SearchInput value={search} onChange={setSearch} placeholder="Kod bo'yicha qidirish..." className="sm:max-w-xs" />
-            <div className="overflow-x-auto no-scrollbar">
-              <Segmented
-                value={promoStatus}
-                onChange={setPromoStatus}
-                options={[
-                  { value: 'all', label: 'Barchasi', count: promos.length },
-                  { value: 'active', label: 'Faol', count: promos.filter((promo) => promo.status === 'active').length },
-                  { value: 'expired', label: 'Tugagan', count: promos.filter((promo) => promo.status === 'expired').length },
-                  { value: 'disabled', label: "O'chirilgan", count: promos.filter((promo) => promo.status === 'disabled').length },
-                ]}
+        {tab === 'promos' ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 sm:gap-3.5">
+            <div className="flex shrink-0 flex-col gap-2 rounded-[14px] border border-line bg-white px-3 py-2.5 shadow-card lg:flex-row lg:flex-wrap lg:items-center">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Kod bo'yicha qidirish..."
+                className="min-w-0 flex-1 lg:max-w-xs"
               />
+              <div className="overflow-x-auto no-scrollbar">
+                <Segmented
+                  className="w-full overflow-x-auto"
+                  value={promoStatus}
+                  onChange={setPromoStatus}
+                  options={[
+                    { value: 'all', label: 'Barchasi', count: promos.length },
+                    { value: 'active', label: 'Faol', count: promos.filter((promo) => promo.status === 'active').length },
+                    { value: 'expired', label: 'Tugagan', count: promos.filter((promo) => promo.status === 'expired').length },
+                    { value: 'disabled', label: "O'chirilgan", count: promos.filter((promo) => promo.status === 'disabled').length },
+                  ]}
+                />
+              </div>
+              <span className="text-[11px] font-semibold text-ink-3 lg:ml-auto">
+                Topildi: <span className="text-ink">{number(filteredPromos.length)}</span> ta
+              </span>
             </div>
-          </div>
 
-          {filteredPromos.length === 0 ? (
-            <div className="p-6">
-              <EmptyState icon={<Tag className="h-6 w-6" />} title="Promo kod topilmadi" text="Yangi kod yaratib, chegirma tarqating." />
-            </div>
-          ) : (
-            <>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[820px] text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-line-2 text-[11.5px] uppercase tracking-[0.04em] text-ink-3">
-                      <th className="px-4 py-3 font-semibold">Kod</th>
-                      <th className="px-4 py-3 font-semibold">Chegirma</th>
-                      <th className="px-4 py-3 font-semibold">Ishlatilgan / Limit</th>
-                      <th className="px-4 py-3 font-semibold">Paket</th>
-                      <th className="px-4 py-3 font-semibold">Muddati</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 text-right font-semibold">Amallar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line-2">
-                    {filteredPromos.map((promo) => (
-                      <tr key={promo.id} className="transition hover:bg-canvas">
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-2 rounded-md border border-dashed border-line bg-canvas px-2.5 py-1 font-mono text-[12px] font-bold tracking-[0.06em] text-ink">
-                            {promo.code}
-                            <button
-                              type="button"
-                              aria-label="Kodni nusxalash"
-                              className="text-ink-3 transition hover:text-brand-text"
-                              onClick={() => {
-                                navigator.clipboard?.writeText(promo.code)
-                                toast({ title: 'Kod nusxalandi', description: promo.code, tone: 'success' })
-                              }}
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                            </button>
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-ink">
-                          {promo.discountType === 'percent' ? percent(promo.amount) : money(promo.amount)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="w-36">
-                            <div className="mb-1 flex items-center justify-between text-[11.5px] text-ink-3">
-                              <span className="font-semibold text-ink-2">{number(promo.used)}</span>
-                              <span>{number(promo.limit)}</span>
-                            </div>
-                            <ProgressBar value={Math.min(100, (promo.used / promo.limit) * 100)} />
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              {filteredPromos.length === 0 ? (
+                <div className="grid min-h-0 flex-1 place-items-center p-4">
+                  <EmptyState
+                    icon={<Tag className="h-5 w-5" />}
+                    title="Promo kod topilmadi"
+                    text="Yangi kod yaratib, chegirma tarqating."
+                    action={
+                      <Button onClick={() => setEditingPromo({ ...EMPTY_PROMO, code: generateCode() })}>
+                        <Plus className="h-4 w-4" /> Yangi kod
+                      </Button>
+                    }
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="hidden min-h-0 flex-1 overflow-y-auto [contain:paint] md:block">
+                    <table className="w-full min-w-[860px] text-left">
+                      <thead className="sticky top-0 z-10 bg-white">
+                        <tr className="border-b border-line-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+                          <th className="px-4 py-2 font-semibold">Kod</th>
+                          <th className="py-2 pr-3 font-semibold">Chegirma</th>
+                          <th className="py-2 pr-3 font-semibold">Ishlatilgan</th>
+                          <th className="py-2 pr-3 font-semibold">Paket</th>
+                          <th className="py-2 pr-3 font-semibold">Muddat</th>
+                          <th className="py-2 pr-3 font-semibold">Status</th>
+                          <th className="px-4 py-2 text-right font-semibold">Amallar</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line-2">
+                        {filteredPromos.map((promo) => {
+                          const left = daysLeft(promo.expiresAt)
+                          return (
+                            <tr key={promo.id} className="text-[12.5px] transition hover:bg-canvas">
+                              <td className="px-4 py-2.5">
+                                <span className="inline-flex items-center gap-2 rounded-[8px] border border-dashed border-line bg-canvas px-2.5 py-1 font-mono text-[12px] font-bold tracking-[0.06em] text-ink">
+                                  {promo.code}
+                                  <button
+                                    type="button"
+                                    aria-label="Kodni nusxalash"
+                                    className="text-ink-3 transition hover:text-brand-text"
+                                    onClick={() => copyCode(promo.code)}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </button>
+                                </span>
+                              </td>
+                              <td className="py-2.5 pr-3 font-semibold text-ink">
+                                {promo.discountType === 'percent' ? percent(promo.amount) : money(promo.amount)}
+                              </td>
+                              <td className="py-2.5 pr-3">
+                                <div className="w-36">
+                                  <div className="mb-1 flex items-center justify-between text-[11px] text-ink-3">
+                                    <span className="font-semibold tabular-nums text-ink-2">{number(promo.used)}</span>
+                                    <span className="tabular-nums">{number(promo.limit)}</span>
+                                  </div>
+                                  <ProgressBar value={Math.min(100, (promo.used / promo.limit) * 100)} />
+                                </div>
+                              </td>
+                              <td className="py-2.5 pr-3 text-ink-2">{PACKAGE_LABEL[promo.packageId]}</td>
+                              <td className="py-2.5 pr-3">
+                                <div className="text-ink-3">{date(promo.expiresAt)}</div>
+                                {promo.status !== 'expired' ? (
+                                  <span
+                                    className={cn(
+                                      'mt-0.5 inline-block rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
+                                      left <= 0
+                                        ? 'bg-error-bg text-error'
+                                        : left <= 7
+                                          ? 'bg-warning-bg text-warning'
+                                          : 'bg-muted text-ink-3',
+                                    )}
+                                  >
+                                    {left <= 0 ? 'Tugagan' : `${number(left)} kun qoldi`}
+                                  </span>
+                                ) : null}
+                              </td>
+                              <td className="py-2.5 pr-3">
+                                <Badge tone={PROMO_STATUS[promo.status].tone}>{PROMO_STATUS[promo.status].label}</Badge>
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Button size="sm" variant="secondary" onClick={() => setEditingPromo(promo)}>
+                                    <Pencil className="h-3.5 w-3.5" /> Tahrirlash
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => togglePromo(promo)} aria-label={promo.status === 'disabled' ? 'Yoqish' : 'Toʻxtatish'}>
+                                    {promo.status === 'disabled' ? (
+                                      <Check className="h-3.5 w-3.5 text-success" />
+                                    ) : (
+                                      <RefreshCw className="h-3.5 w-3.5" />
+                                    )}
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => setDeletePromoTarget(promo)} aria-label="O'chirish">
+                                    <Trash2 className="h-3.5 w-3.5 text-error" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <ul className="min-h-0 flex-1 divide-y divide-line-2 overflow-y-auto [contain:paint] md:hidden">
+                    {filteredPromos.map((promo) => {
+                      const left = daysLeft(promo.expiresAt)
+                      return (
+                        <li key={promo.id} className="px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-[8px] border border-dashed border-line bg-canvas px-2.5 py-1 font-mono text-[12px] font-bold tracking-[0.06em] text-ink">
+                              {promo.code}
+                              <button type="button" aria-label="Nusxalash" className="text-ink-3" onClick={() => copyCode(promo.code)}>
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                            </span>
+                            <Badge tone={PROMO_STATUS[promo.status].tone}>{PROMO_STATUS[promo.status].label}</Badge>
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-ink-2">{PACKAGE_LABEL[promo.packageId]}</td>
-                        <td className="px-4 py-3 text-ink-3">{date(promo.expiresAt)}</td>
-                        <td className="px-4 py-3"><Badge tone={PROMO_STATUS[promo.status].tone}>{PROMO_STATUS[promo.status].label}</Badge></td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="secondary" onClick={() => setEditingPromo(promo)}><Pencil className="h-3.5 w-3.5" /> Tahrirlash</Button>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-ink-3">
+                            <span className="font-semibold text-ink">
+                              {promo.discountType === 'percent' ? percent(promo.amount) : money(promo.amount)}
+                            </span>
+                            <span>Paket: {PACKAGE_LABEL[promo.packageId]}</span>
+                            <span>{date(promo.expiresAt)}</span>
+                            {promo.status !== 'expired' ? (
+                              <span
+                                className={cn(
+                                  'rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
+                                  left <= 0 ? 'bg-error-bg text-error' : left <= 7 ? 'bg-warning-bg text-warning' : 'bg-muted text-ink-3',
+                                )}
+                              >
+                                {left <= 0 ? 'Tugagan' : `${number(left)} kun qoldi`}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className="flex-1">
+                              <ProgressBar value={Math.min(100, (promo.used / promo.limit) * 100)} />
+                            </div>
+                            <span className="text-[11px] tabular-nums text-ink-3">
+                              {number(promo.used)}/{number(promo.limit)}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex gap-1.5">
+                            <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditingPromo(promo)}>
+                              <Pencil className="h-3.5 w-3.5" /> Tahrirlash
+                            </Button>
                             <Button size="sm" variant="ghost" onClick={() => togglePromo(promo)}>
-                              {promo.status === 'disabled' ? <Check className="h-3.5 w-3.5 text-success" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                              {promo.status === 'disabled' ? 'Yoqish' : 'Toʻxtatish'}
                             </Button>
                             <Button size="sm" variant="ghost" onClick={() => setDeletePromoTarget(promo)} aria-label="O'chirish">
                               <Trash2 className="h-3.5 w-3.5 text-error" />
                             </Button>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <ul className="divide-y divide-line-2 md:hidden">
-                {filteredPromos.map((promo) => (
-                  <li key={promo.id} className="space-y-2.5 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="inline-flex items-center gap-2 rounded-md border border-dashed border-line bg-canvas px-2.5 py-1 font-mono text-[12px] font-bold tracking-[0.06em] text-ink">
-                        {promo.code}
-                        <button
-                          type="button"
-                          aria-label="Nusxalash"
-                          className="text-ink-3"
-                          onClick={() => {
-                            navigator.clipboard?.writeText(promo.code)
-                            toast({ title: 'Kod nusxalandi', description: promo.code, tone: 'success' })
-                          }}
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
-                      <Badge tone={PROMO_STATUS[promo.status].tone}>{PROMO_STATUS[promo.status].label}</Badge>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-3">
-                      <span className="font-semibold text-ink">{promo.discountType === 'percent' ? percent(promo.amount) : money(promo.amount)}</span>
-                      <span>Paket: {PACKAGE_LABEL[promo.packageId]}</span>
-                      <span>Muddat: {date(promo.expiresAt)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <ProgressBar value={Math.min(100, (promo.used / promo.limit) * 100)} />
-                      </div>
-                      <span className="text-[11.5px] text-ink-3 tabular">{number(promo.used)}/{number(promo.limit)}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditingPromo(promo)}><Pencil className="h-3.5 w-3.5" /> Tahrirlash</Button>
-                      <Button size="sm" variant="ghost" onClick={() => togglePromo(promo)}>{promo.status === 'disabled' ? 'Yoqish' : "To'xtatish"}</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setDeletePromoTarget(promo)} aria-label="O'chirish"><Trash2 className="h-3.5 w-3.5 text-error" /></Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      ) : null}
-
-      {tab === 'referrals' ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard label="Jami referral kodlar" value={number(referralStats.codes)} icon={<Share2 className="h-5 w-5" />} />
-            <StatCard label="Bu oy ishlatilgan" value={number(referralStats.usedThisMonth)} icon={<Users className="h-5 w-5" />} iconClass="bg-info-bg text-info" />
-            <StatCard label="Daromad" value={money(referralStats.revenue)} icon={<Wallet className="h-5 w-5" />} iconClass="bg-coin-bg text-[#b45309]" />
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
+            </section>
           </div>
+        ) : null}
 
-          <div className="card p-0">
-            <div className="border-b border-line-2 px-4 py-3.5">
-              <h3 className="text-[14px] font-semibold text-ink">Referral natijalari</h3>
-              <p className="mt-0.5 text-[11.5px] text-ink-3">Foydalanuvchilar tomonidan taklif qilingan do'stlar va daromad</p>
+        {tab === 'referrals' ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 sm:gap-3.5">
+            <div className="grid shrink-0 grid-cols-3 divide-x divide-line-2 overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              {[
+                { icon: Share2, label: 'Referral kodlar', value: number(referralStats.codes), foot: `${number(referralStats.usedThisMonth)} ta ishlatilgan` },
+                { icon: Users, label: 'Taklif qilingan', value: number(referralRows.reduce((total, row) => total + row.invited, 0)), foot: "Jami do'stlar" },
+                { icon: Wallet, label: 'Referral daromad', value: money(referralStats.revenue), foot: 'Bu oy ishlatilgan kodlar' },
+              ].map((cell) => {
+                const Icon = cell.icon
+                return (
+                  <div key={cell.label} className="min-w-0 px-3 py-2">
+                    <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                      <Icon className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{cell.label}</span>
+                    </div>
+                    <p className="mt-1 truncate text-[17px] font-geist leading-none tabular-nums text-ink sm:text-[18px]">
+                      {cell.value}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] font-medium text-ink-3">{cell.foot}</p>
+                  </div>
+                )
+              })}
             </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[680px] text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-line-2 text-[11.5px] uppercase tracking-[0.04em] text-ink-3">
-                    <th className="px-4 py-3 font-semibold">Foydalanuvchi</th>
-                    <th className="px-4 py-3 font-semibold">Referral kodi</th>
-                    <th className="px-4 py-3 font-semibold">Taklif qilingan</th>
-                    <th className="px-4 py-3 font-semibold">Daromad</th>
-                    <th className="px-4 py-3 font-semibold">Sana</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line-2">
-                  {referralRows.map((referral) => (
-                    <tr key={referral.id} className="transition hover:bg-canvas">
-                      <td className="px-4 py-3 font-medium text-ink">{referral.userName}</td>
-                      <td className="px-4 py-3 font-mono text-[12px] font-semibold text-ink-2">{referral.code}</td>
-                      <td className="px-4 py-3">
-                        <Badge tone="brand">{number(referral.invited)} ta</Badge>
-                      </td>
-                      <td className="px-4 py-3 font-semibold tabular text-ink">{money(referral.revenue)}</td>
-                      <td className="px-4 py-3 text-ink-3">{date(referral.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            <div className="grid shrink-0 grid-cols-3 items-end gap-2">
+              {podiumOrder.map((referral) => {
+                if (!referral) return null
+                const rank = referralRows.indexOf(referral) + 1
+                const isFirst = rank === 1
+                return (
+                  <div
+                    key={referral.id}
+                    className={cn(
+                      'flex min-w-0 flex-col items-center rounded-[14px] border bg-white px-2 pb-2.5 pt-3 text-center shadow-card',
+                      isFirst ? 'border-brand/50 bg-brand-soft/40' : 'border-line',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'mb-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums',
+                        rank === 1
+                          ? 'bg-coin-bg text-[#b45309]'
+                          : rank === 2
+                            ? 'bg-muted text-ink-2'
+                            : 'bg-warning-bg text-warning',
+                      )}
+                    >
+                      <Trophy className="h-3 w-3" />
+                      {number(rank)}-o‘rin
+                    </span>
+                    <Avatar name={referral.userName} size={isFirst ? 'lg' : 'md'} />
+                    <p className="mt-1.5 w-full truncate text-[11.5px] font-semibold leading-tight text-ink sm:text-[12.5px]">
+                      {referral.userName}
+                    </p>
+                    <p className="w-full truncate font-mono text-[10px] text-ink-3">{referral.code}</p>
+                    <p className={cn('mt-1 tabular-nums', isFirst ? 'text-[14px] font-bold text-ink' : 'text-[12.5px] font-semibold text-ink')}>
+                      {money(referral.revenue)}
+                    </p>
+                    <p className="text-[10px] text-ink-3">{number(referral.invited)} ta taklif</p>
+                  </div>
+                )
+              })}
             </div>
-            <ul className="divide-y divide-line-2 md:hidden">
-              {referralRows.map((referral) => (
-                <li key={referral.id} className="flex items-center justify-between gap-3 p-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-ink">{referral.userName}</p>
-                    <p className="mt-0.5 font-mono text-[11.5px] text-ink-3">{referral.code} · {date(referral.createdAt)}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[13px] font-semibold text-ink">{money(referral.revenue)}</p>
-                    <p className="text-[11.5px] text-ink-3">{number(referral.invited)} ta taklif</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : null}
 
-      {tab === 'campaigns' ? (
-        campaigns.length === 0 ? (
-          <div className="card p-6">
-            <EmptyState icon={<Megaphone className="h-6 w-6" />} title="Aksiya yo'q" text="Yangi aksiya yaratib, foydalanuvchilarni jalb qiling." action={<Button onClick={() => setEditingCampaign({ ...EMPTY_CAMPAIGN })}><Plus className="h-4 w-4" /> Yangi aksiya</Button>} />
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {[...campaigns]
-              .sort((left, right) => right.startsAt.localeCompare(left.startsAt))
-              .map((campaign) => (
-                <div key={campaign.id} className="card card-hover flex flex-col">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className={cn(
-                        'grid h-10 w-10 place-items-center rounded-xl',
-                        campaign.status === 'active' ? 'bg-brand-soft text-brand-text' : 'bg-muted text-ink-3',
-                      )}>
-                        <Gift className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <p className="font-semibold text-ink">{campaign.name}</p>
-                        <p className="text-[11.5px] text-ink-3">{CAMPAIGN_TYPE[campaign.type]}</p>
-                      </div>
-                    </div>
-                    <Badge tone={CAMPAIGN_STATUS[campaign.status].tone}>{CAMPAIGN_STATUS[campaign.status].label}</Badge>
-                  </div>
-
-                  <div className="mt-4 rounded-xl bg-canvas px-3.5 py-3">
-                    <p className="text-[12px] text-ink-3">Qiymati</p>
-                    <p className="mt-0.5 font-display text-[20px] font-extrabold tracking-[-0.01em] text-ink">{campaign.value}</p>
-                    <p className="mt-2 line-clamp-2 text-[12px] text-ink-2">{campaign.banner}</p>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2 text-[11.5px] text-ink-3">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {date(campaign.startsAt)} — {date(campaign.endsAt)}
-                  </div>
-
-                  <div className="mt-4 flex gap-2 border-t border-line-2 pt-3">
-                    <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditingCampaign(campaign)}><Pencil className="h-3.5 w-3.5" /> Tahrirlash</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setDeleteCampaignTarget(campaign)} aria-label="O'chirish"><Trash2 className="h-3.5 w-3.5 text-error" /></Button>
-                  </div>
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              {restRows.length === 0 ? (
+                <div className="grid min-h-0 flex-1 place-items-center p-4">
+                  <EmptyState icon={<Share2 className="h-5 w-5" />} title="Boshqa ishtirokchi yo'q" text="Top-3 dan tashqari referral yozuvlari shu yerda ko'rinadi." />
                 </div>
-              ))}
+              ) : (
+                <ul className="min-h-0 flex-1 divide-y divide-line-2 overflow-y-auto [contain:paint]">
+                  {restRows.map((referral) => {
+                    const rank = referralRows.indexOf(referral) + 1
+                    return (
+                      <li key={referral.id} className="flex items-center gap-2.5 px-3 py-2 sm:px-4">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-line-2 bg-canvas text-[11px] font-bold tabular-nums text-ink-3">
+                          {number(rank)}
+                        </span>
+                        <Avatar name={referral.userName} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12.5px] font-semibold text-ink">{referral.userName}</p>
+                          <p className="truncate font-mono text-[10.5px] text-ink-3">
+                            {referral.code} · {date(referral.createdAt)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[12.5px] font-bold tabular-nums text-ink">{money(referral.revenue)}</span>
+                        <Badge tone="brand">{number(referral.invited)} ta</Badge>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </section>
           </div>
-        )
-      ) : null}
+        ) : null}
 
-      <PromoModal promo={editingPromo} promos={promos} onClose={() => setEditingPromo(null)} onSave={savePromo} />
+        {tab === 'campaigns' ? (
+          campaignRows.length === 0 ? (
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              <div className="grid min-h-0 flex-1 place-items-center p-4">
+                <EmptyState
+                  icon={<Megaphone className="h-5 w-5" />}
+                  title="Aksiya yo'q"
+                  text="Yangi aksiya yaratib, foydalanuvchilarni jalb qiling."
+                  action={<Button onClick={() => setEditingCampaign({ ...EMPTY_CAMPAIGN })}><Plus className="h-4 w-4" /> Yangi aksiya</Button>}
+                />
+              </div>
+            </section>
+          ) : (
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-y-auto [contain:paint] sm:gap-3.5 lg:grid-cols-2 lg:content-start">
+              {campaignRows.map((campaign) => {
+                const start = Date.parse(campaign.startsAt)
+                const end = Date.parse(campaign.endsAt)
+                const elapsed = Math.min(100, Math.max(0, ((NOW - start) / (end - start)) * 100))
+                return (
+                  <div key={campaign.id} className="flex flex-col rounded-[14px] border border-line bg-white p-3.5 shadow-card">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className={cn(
+                            'grid h-9 w-9 shrink-0 place-items-center rounded-[10px]',
+                            campaign.status === 'active' ? 'bg-brand-soft text-brand-text' : 'bg-muted text-ink-3',
+                          )}
+                        >
+                          <Gift className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-ink">{campaign.name}</p>
+                          <p className="truncate text-[11px] text-ink-3">{CAMPAIGN_TYPE[campaign.type]}</p>
+                        </div>
+                      </div>
+                      <Badge tone={CAMPAIGN_STATUS[campaign.status].tone}>{CAMPAIGN_STATUS[campaign.status].label}</Badge>
+                    </div>
 
-      <Modal
-        open={deletePromoTarget !== null}
-        onClose={() => setDeletePromoTarget(null)}
-        title="Promo kodni o'chirish"
-        description={deletePromoTarget?.code}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDeletePromoTarget(null)}>Bekor qilish</Button>
-            <Button variant="destructive" onClick={confirmDeletePromo}><Trash2 className="h-4 w-4" /> O'chirish</Button>
-          </>
-        }
-      >
-        <p className="text-[13px] text-ink-2"><b>{deletePromoTarget?.code}</b> promo kodi o'chiriladi. Foydalanuvchilar uni boshqa ishlata olmaydi.</p>
-      </Modal>
+                    <div className="mt-3 rounded-xl bg-canvas px-3 py-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-3">Qiymati</p>
+                      <p className="mt-0.5 truncate font-geist text-[17px] font-bold tracking-[-0.01em] text-ink">{campaign.value}</p>
+                      {campaign.banner ? (
+                        <p className="mt-1.5 line-clamp-2 border-t border-line-2 pt-1.5 text-[11.5px] leading-snug text-ink-2">
+                          “{campaign.banner}”
+                        </p>
+                      ) : null}
+                    </div>
 
-      <CampaignModal campaign={editingCampaign} onClose={() => setEditingCampaign(null)} onSave={saveCampaign} />
+                    <div className="mt-3">
+                      <div className="mb-1 flex items-center justify-between text-[10.5px] text-ink-3">
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {date(campaign.startsAt)} — {date(campaign.endsAt)}
+                        </span>
+                        <span className="font-bold tabular-nums">{Math.round(elapsed)}%</span>
+                      </div>
+                      <ProgressBar value={elapsed} />
+                    </div>
 
-      <Modal
-        open={deleteCampaignTarget !== null}
-        onClose={() => setDeleteCampaignTarget(null)}
-        title="Aksiyani o'chirish"
-        description={deleteCampaignTarget?.name}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDeleteCampaignTarget(null)}>Bekor qilish</Button>
-            <Button variant="destructive" onClick={confirmDeleteCampaign}><Trash2 className="h-4 w-4" /> O'chirish</Button>
-          </>
-        }
-      >
-        <p className="text-[13px] text-ink-2"><b>{deleteCampaignTarget?.name}</b> aksiyasi o'chiriladi va ilovadagi banner olib tashlanadi.</p>
-      </Modal>
+                    <div className="mt-3 flex gap-1.5 border-t border-line-2 pt-2.5">
+                      <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditingCampaign(campaign)}>
+                        <Pencil className="h-3.5 w-3.5" /> Tahrirlash
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDeleteCampaignTarget(campaign)} aria-label="O'chirish">
+                        <Trash2 className="h-3.5 w-3.5 text-error" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        ) : null}
+
+        <PromoModal promo={editingPromo} promos={promos} onClose={() => setEditingPromo(null)} onSave={savePromo} />
+
+        <Modal
+          open={deletePromoTarget !== null}
+          onClose={() => setDeletePromoTarget(null)}
+          title="Promo kodni o'chirish"
+          description={deletePromoTarget?.code}
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeletePromoTarget(null)}>Bekor qilish</Button>
+              <Button variant="destructive" onClick={confirmDeletePromo}><Trash2 className="h-4 w-4" /> O'chirish</Button>
+            </>
+          }
+        >
+          <p className="text-[13px] text-ink-2"><b>{deletePromoTarget?.code}</b> promo kodi o'chiriladi. Foydalanuvchilar uni boshqa ishlata olmaydi.</p>
+        </Modal>
+
+        <CampaignModal campaign={editingCampaign} onClose={() => setEditingCampaign(null)} onSave={saveCampaign} />
+
+        <Modal
+          open={deleteCampaignTarget !== null}
+          onClose={() => setDeleteCampaignTarget(null)}
+          title="Aksiyani o'chirish"
+          description={deleteCampaignTarget?.name}
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeleteCampaignTarget(null)}>Bekor qilish</Button>
+              <Button variant="destructive" onClick={confirmDeleteCampaign}><Trash2 className="h-4 w-4" /> O'chirish</Button>
+            </>
+          }
+        >
+          <p className="text-[13px] text-ink-2"><b>{deleteCampaignTarget?.name}</b> aksiyasi o'chiriladi va ilovadagi banner olib tashlanadi.</p>
+        </Modal>
+      </div>
     </PageTransition>
   )
 }

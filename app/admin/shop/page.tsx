@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
+  Clock3,
   Coins,
   ImagePlus,
   Package,
@@ -13,7 +14,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { PageHeader, PageTransition } from '@/components/layout/Page'
+import { PageTransition } from '@/components/layout/Page'
 import {
   Avatar,
   Badge,
@@ -26,8 +27,6 @@ import {
   SearchInput,
   Segmented,
   Select,
-  StatCard,
-  Tabs,
   Textarea,
   cn,
   useToast,
@@ -83,7 +82,10 @@ export default function ShopPage() {
   const [orderPeriod, setOrderPeriod] = useState('90')
   const [orderSearch, setOrderSearch] = useState('')
 
-  const categories = useMemo(() => Array.from(new Set(products.map((product) => product.category))), [products])
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((product) => product.category))),
+    [products],
+  )
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -113,11 +115,21 @@ export default function ShopPage() {
       .filter((order) => {
         if (orderStatus !== 'all' && order.status !== orderStatus) return false
         if (limit !== Infinity && anchor - new Date(order.createdAt).getTime() > limit) return false
-        if (term && !`${order.userName} ${order.productName} ${order.id}`.toLowerCase().includes(term)) return false
+        if (term && !`${order.userName} ${order.productName} ${order.id}`.toLowerCase().includes(term))
+          return false
         return true
       })
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   }, [orders, orderStatus, orderPeriod, orderSearch])
+
+  const pendingOrders = useMemo(
+    () => filteredOrders.filter((order) => order.status === 'pending'),
+    [filteredOrders],
+  )
+  const historyOrders = useMemo(
+    () => filteredOrders.filter((order) => order.status !== 'pending'),
+    [filteredOrders],
+  )
 
   const activeProducts = products.filter((product) => product.status === 'active').length
   const totalStock = products.reduce((total, product) => total + product.stock, 0)
@@ -138,7 +150,6 @@ export default function ShopPage() {
     toast({
       title: product.id ? 'Mahsulot yangilandi' : 'Mahsulot qo\'shildi',
       description: next.name,
-      tone: 'success',
     })
     setEditing(null)
   }
@@ -146,7 +157,7 @@ export default function ShopPage() {
   const confirmDelete = () => {
     if (!deleteTarget) return
     deleteProduct(deleteTarget.id)
-    toast({ title: 'Mahsulot o\'chirildi', description: deleteTarget.name, tone: 'success' })
+    toast({ title: 'Mahsulot o\'chirildi', description: deleteTarget.name })
     setDeleteTarget(null)
   }
 
@@ -161,53 +172,132 @@ export default function ShopPage() {
 
   return (
     <PageTransition>
-      <PageHeader
-        title={
-          <span className="flex flex-wrap items-center gap-2.5">
-            Do'kon <Badge tone="brand">{number(products.length)} mahsulot</Badge>
-          </span>
-        }
-        subtitle="Coin do'koni mahsulotlari, buyurtmalar va sovg'alar"
-        breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: "Do'kon" }]}
-        actions={
-          tab === 'products' ? (
-            <Button onClick={() => setEditing({ ...EMPTY_PRODUCT })}>
-              <Plus className="h-4 w-4" /> Yangi mahsulot
+      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
+              <span className="text-ink-3">Dashboard</span>
+              <span className="text-placeholder">/</span>
+              <span className="text-ink">Do'kon</span>
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center gap-2">
+              <h1 className="h2 truncate text-ink">Do'kon</h1>
+              <Badge tone="brand">{number(products.length)} mahsulot</Badge>
+            </div>
+            <p className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">
+              Coin do'koni mahsulotlari, buyurtmalar va sovg'alar
+            </p>
+          </div>
+          {tab === 'products' ? (
+            <Button onClick={() => setEditing({ ...EMPTY_PRODUCT })} className="h-10 sm:h-11">
+              <Plus className="h-4 w-4" />
+              <span className="max-[360px]:hidden">Yangi mahsulot</span>
             </Button>
-          ) : null
-        }
-      />
+          ) : null}
+        </div>
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Mahsulotlar" value={number(products.length)} hint={`Faol: ${number(activeProducts)} ta`} icon={<Package className="h-5 w-5" />} />
-        <StatCard label="Ombordagi qoldiq" value={number(totalStock)} hint="Barcha mahsulotlar bo'yicha" icon={<ShoppingBag className="h-5 w-5" />} iconClass="bg-info-bg text-info" />
-        <StatCard label="Sotilgan" value={number(totalSold)} hint="Jami xaridlar soni" icon={<Coins className="h-5 w-5" />} iconClass="bg-coin-bg text-[#b45309]" />
-        <StatCard label="Kutilayotgan buyurtma" value={number(orderCounts.pending)} hint="Bajarish kutmoqda" icon={<Check className="h-5 w-5" />} iconClass="bg-warning-bg text-warning" />
-      </div>
+        <div className="flex shrink-0" role="tablist" aria-label="Do'kon bo'limlari">
+          <div className="inline-flex rounded-[12px] border border-line bg-white p-1 shadow-card">
+            {(
+              [
+                { value: 'products', label: 'Mahsulotlar', count: products.length },
+                { value: 'orders', label: 'Buyurtmalar', count: orderCounts.pending },
+              ] as const
+            ).map((item) => {
+              const active = tab === item.value
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(item.value)}
+                  className={cn(
+                    'inline-flex h-8 items-center gap-1.5 rounded-[9px] px-3 text-[12px] font-semibold transition',
+                    active ? 'bg-ink text-white shadow-sm' : 'text-ink-3 hover:text-ink',
+                  )}
+                >
+                  {item.value === 'products' ? (
+                    <Package className="h-3.5 w-3.5" />
+                  ) : (
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                  )}
+                  {item.label}
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums',
+                      active ? 'bg-white/20 text-white' : 'bg-muted text-ink-3',
+                    )}
+                  >
+                    {number(item.count)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
 
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        items={[
-          { value: 'products', label: 'Mahsulotlar', count: products.length },
-          { value: 'orders', label: 'Buyurtmalar', count: orders.length },
-        ]}
-        className="mb-5"
-      />
+        <div className="grid shrink-0 grid-cols-2 divide-x divide-line-2 overflow-hidden rounded-[14px] border border-line bg-white shadow-card sm:grid-cols-4">
+          {[
+            {
+              icon: Package,
+              label: 'Mahsulotlar',
+              value: number(products.length),
+              foot: `Faol: ${number(activeProducts)}`,
+            },
+            {
+              icon: ShoppingBag,
+              label: 'Ombor qoldiqi',
+              value: number(totalStock),
+              foot: 'Barcha mahsulotlar',
+            },
+            {
+              icon: Coins,
+              label: 'Sotilgan',
+              value: number(totalSold),
+              foot: 'Jami xaridlar soni',
+            },
+            {
+              icon: Clock3,
+              label: 'Kutilayotgan buyurtma',
+              value: number(orderCounts.pending),
+              foot: 'Bajarish kutmoqda',
+              accent: orderCounts.pending > 0,
+            },
+          ].map((cell) => {
+            const Icon = cell.icon
+            return (
+              <div key={cell.label} className="min-w-0 px-3 py-2">
+                <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                  <Icon className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{cell.label}</span>
+                </div>
+                <p
+                  className={cn(
+                    'mt-1 text-[18px] font-geist leading-none tabular-nums',
+                    cell.accent ? 'text-warning' : 'text-ink',
+                  )}
+                >
+                  {cell.value}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] font-medium text-ink-3">{cell.foot}</p>
+              </div>
+            )
+          })}
+        </div>
 
-      {tab === 'products' ? (
-        <div className="card p-0">
-          <div className="flex flex-col gap-3 border-b border-line-2 p-4 lg:flex-row lg:items-center">
-            <SearchInput value={search} onChange={setSearch} placeholder="Mahsulot nomi bo'yicha qidirish..." className="lg:max-w-sm" />
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-              <Select value={category} onChange={(event) => setCategory(event.target.value)} className="min-w-[140px]">
-                <option value="all">Barcha kategoriya</option>
-                {categories.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </Select>
+        {tab === 'products' ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 sm:gap-3.5">
+            <div className="flex shrink-0 flex-col gap-2 rounded-[14px] border border-line bg-white px-3 py-2.5 shadow-card lg:flex-row lg:flex-wrap lg:items-center">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Mahsulot nomi bo'yicha qidirish..."
+                className="min-w-0 flex-1 lg:max-w-xs"
+              />
               <div className="overflow-x-auto no-scrollbar">
                 <Segmented
+                  className="w-full overflow-x-auto"
                   value={productStatus}
                   onChange={setProductStatus}
                   options={[
@@ -218,238 +308,326 @@ export default function ShopPage() {
                   ]}
                 />
               </div>
+              <Select
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="lg:w-[160px]"
+              >
+                <option value="all">Barcha kategoriya</option>
+                {categories.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </Select>
+              <span className="text-[11px] font-semibold text-ink-3 lg:ml-auto">
+                Topildi: <span className="text-ink">{number(filteredProducts.length)}</span> ta
+              </span>
             </div>
-            <span className="text-[12px] text-ink-3 lg:ml-auto">Topildi: <span className="font-semibold text-ink">{number(filteredProducts.length)}</span> ta</span>
-          </div>
 
-          {filteredProducts.length === 0 ? (
-            <div className="p-6">
-              <EmptyState icon={<Package className="h-6 w-6" />} title="Mahsulot topilmadi" text="Filtrlarni o'zgartiring yoki yangi mahsulot qo'shing." action={<Button onClick={() => setEditing({ ...EMPTY_PRODUCT })}><Plus className="h-4 w-4" /> Mahsulot qo'shish</Button>} />
-            </div>
-          ) : (
-            <>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[860px] text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-line-2 text-[11.5px] uppercase tracking-[0.04em] text-ink-3">
-                      <th className="px-4 py-3 font-semibold">Mahsulot</th>
-                      <th className="px-4 py-3 font-semibold">Kategoriya</th>
-                      <th className="px-4 py-3 font-semibold">Coin narxi</th>
-                      <th className="px-4 py-3 font-semibold">Qoldi</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 text-right font-semibold">Amallar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line-2">
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              {filteredProducts.length === 0 ? (
+                <div className="grid min-h-0 flex-1 place-items-center p-4">
+                  <EmptyState
+                    icon={<Package className="h-5 w-5" />}
+                    title="Mahsulot topilmadi"
+                    text="Filtrlarni o'zgartiring yoki yangi mahsulot qo'shing."
+                    action={
+                      <Button onClick={() => setEditing({ ...EMPTY_PRODUCT })}>
+                        <Plus className="h-4 w-4" /> Mahsulot qo'shish
+                      </Button>
+                    }
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="hidden min-h-0 flex-1 overflow-y-auto [contain:paint] md:block">
+                    <table className="w-full text-left">
+                      <thead className="sticky top-0 z-10 bg-white">
+                        <tr className="border-b border-line-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+                          <th className="px-4 py-2 font-semibold">Mahsulot</th>
+                          <th className="py-2 pr-3 font-semibold">Kategoriya</th>
+                          <th className="py-2 pr-3 font-semibold">Coin narxi</th>
+                          <th className="py-2 pr-3 font-semibold">Qoldiq</th>
+                          <th className="py-2 pr-3 font-semibold">Sotilgan</th>
+                          <th className="py-2 pr-3 font-semibold">Status</th>
+                          <th className="px-4 py-2 text-right font-semibold">Amallar</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line-2">
+                        {filteredProducts.map((product) => (
+                          <tr key={product.id} className="text-[12.5px] transition hover:bg-canvas">
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-2.5">
+                                <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[10px] border border-line-2 bg-canvas text-[18px]">
+                                  {product.image ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                                  ) : (
+                                    product.emoji
+                                  )}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-ink">{product.name}</p>
+                                  <p className="max-w-[260px] truncate text-[11px] text-ink-3">
+                                    {product.description}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-2.5 pr-3 text-ink-2">{product.category}</td>
+                            <td className="py-2.5 pr-3">
+                              <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-[#b45309]">
+                                <Coins className="h-3.5 w-3.5" /> {number(product.price)}
+                              </span>
+                            </td>
+                            <td className="py-2.5 pr-3">
+                              <span
+                                className={cn(
+                                  'font-semibold tabular-nums',
+                                  product.stock === 0 ? 'text-error' : 'text-ink',
+                                )}
+                              >
+                                {number(product.stock)}
+                              </span>
+                            </td>
+                            <td className="py-2.5 pr-3 tabular-nums text-ink-2">{number(product.sold)}</td>
+                            <td className="py-2.5 pr-3">
+                              <Badge tone={PRODUCT_STATUS[product.status].tone}>
+                                {PRODUCT_STATUS[product.status].label}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button size="sm" variant="secondary" onClick={() => setEditing(product)}>
+                                  <Pencil className="h-3.5 w-3.5" /> Tahrirlash
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setDeleteTarget(product)}
+                                  aria-label={`${product.name} o'chirish`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-error" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <ul className="min-h-0 flex-1 divide-y divide-line-2 overflow-y-auto [contain:paint] md:hidden">
                     {filteredProducts.map((product) => (
-                      <tr key={product.id} className="transition hover:bg-canvas">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-line-2 bg-canvas text-[20px]">
-                              {product.image ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
-                              ) : (
-                                product.emoji
-                              )}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-ink">{product.name}</p>
-                              <p className="max-w-[300px] truncate text-[11.5px] text-ink-3">{product.description}</p>
+                      <li key={product.id} className="px-3 py-2.5">
+                        <div className="flex items-start gap-2.5">
+                          <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[10px] border border-line-2 bg-canvas text-[18px]">
+                            {product.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+                            ) : (
+                              product.emoji
+                            )}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="min-w-0 truncate text-[12.5px] font-semibold text-ink">
+                                {product.name}
+                              </p>
+                              <Badge tone={PRODUCT_STATUS[product.status].tone}>
+                                {PRODUCT_STATUS[product.status].label}
+                              </Badge>
+                            </div>
+                            <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-3">
+                              {product.description || '—'}
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-ink-3">
+                              <span>{product.category}</span>
+                              <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-[#b45309]">
+                                <Coins className="h-3 w-3" /> {number(product.price)}
+                              </span>
+                              <span>
+                                Qoldi:{' '}
+                                <b className={cn('tabular-nums', product.stock === 0 ? 'text-error' : 'text-ink-2')}>
+                                  {number(product.stock)}
+                                </b>
+                              </span>
+                              <span>Sotilgan: {number(product.sold)}</span>
+                            </div>
+                            <div className="mt-2 flex gap-1.5">
+                              <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditing(product)}>
+                                <Pencil className="h-3.5 w-3.5" /> Tahrirlash
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setDeleteTarget(product)}
+                                aria-label="O'chirish"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-error" />
+                              </Button>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-ink-2">{product.category}</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1.5 font-semibold tabular text-[#b45309]">
-                            <Coins className="h-3.5 w-3.5" /> {number(product.price)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={cn('font-semibold tabular', product.stock === 0 ? 'text-error' : 'text-ink')}>{number(product.stock)}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge tone={PRODUCT_STATUS[product.status].tone}>{PRODUCT_STATUS[product.status].label}</Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="secondary" onClick={() => setEditing(product)}>
-                              <Pencil className="h-3.5 w-3.5" /> Tahrirlash
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(product)} aria-label={`${product.name} o'chirish`}>
-                              <Trash2 className="h-3.5 w-3.5 text-error" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </li>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <ul className="divide-y divide-line-2 md:hidden">
-                {filteredProducts.map((product) => (
-                  <li key={product.id} className="p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-line-2 bg-canvas text-[22px]">
-                        {product.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
-                        ) : (
-                          product.emoji
-                        )}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-ink">{product.name}</p>
-                          <Badge tone={PRODUCT_STATUS[product.status].tone}>{PRODUCT_STATUS[product.status].label}</Badge>
-                        </div>
-                        <p className="mt-0.5 line-clamp-2 text-[11.5px] text-ink-3">{product.description}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-3">
-                          <span>{product.category}</span>
-                          <span className="inline-flex items-center gap-1 font-semibold text-[#b45309]"><Coins className="h-3.5 w-3.5" /> {number(product.price)}</span>
-                          <span>Qoldi: <b className={product.stock === 0 ? 'text-error' : 'text-ink-2'}>{number(product.stock)}</b></span>
-                        </div>
-                        <div className="mt-3 flex gap-2">
-                          <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditing(product)}><Pencil className="h-3.5 w-3.5" /> Tahrirlash</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(product)} aria-label="O'chirish"><Trash2 className="h-3.5 w-3.5 text-error" /></Button>
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="card p-0">
-          <div className="flex flex-col gap-3 border-b border-line-2 p-4 lg:flex-row lg:items-center">
-            <SearchInput value={orderSearch} onChange={setOrderSearch} placeholder="Foydalanuvchi yoki mahsulot..." className="lg:max-w-sm" />
-            <div className="overflow-x-auto no-scrollbar">
-              <Segmented
-                value={orderStatus}
-                onChange={setOrderStatus}
-                options={[
-                  { value: 'all', label: 'Barchasi', count: orderCounts.all },
-                  { value: 'pending', label: 'Kutilmoqda', count: orderCounts.pending },
-                  { value: 'done', label: 'Bajarildi', count: orderCounts.done },
-                  { value: 'cancelled', label: 'Bekor qilindi', count: orderCounts.cancelled },
-                ]}
-              />
-            </div>
-            <Select value={orderPeriod} onChange={(event) => setOrderPeriod(event.target.value)} className="lg:ml-auto lg:w-[170px]">
-              <option value="7">Oxirgi 7 kun</option>
-              <option value="30">Oxirgi 30 kun</option>
-              <option value="90">Oxirgi 90 kun</option>
-              <option value="all">Barcha davr</option>
-            </Select>
+                  </ul>
+                </>
+              )}
+            </section>
           </div>
+        ) : null}
 
-          {filteredOrders.length === 0 ? (
-            <div className="p-6">
-              <EmptyState icon={<ShoppingBag className="h-6 w-6" />} title="Buyurtma topilmadi" text="Tanlangan filtrlar bo'yicha buyurtmalar mavjud emas." />
-            </div>
-          ) : (
-            <>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[820px] text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-line-2 text-[11.5px] uppercase tracking-[0.04em] text-ink-3">
-                      <th className="px-4 py-3 font-semibold">Buyurtma</th>
-                      <th className="px-4 py-3 font-semibold">Foydalanuvchi</th>
-                      <th className="px-4 py-3 font-semibold">Mahsulot</th>
-                      <th className="px-4 py-3 font-semibold">Coin</th>
-                      <th className="px-4 py-3 font-semibold">Sana</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 text-right font-semibold">Amallar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line-2">
-                    {filteredOrders.map((order) => (
-                      <tr key={order.id} className="transition hover:bg-canvas">
-                        <td className="px-4 py-3 font-mono text-[11.5px] font-semibold text-ink-2">{order.id}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar name={order.userName} size="sm" />
-                            <span className="font-medium text-ink">{order.userName}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-ink-2">{order.productName}</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 font-semibold tabular text-[#b45309]"><Coins className="h-3.5 w-3.5" />{number(order.coins)}</span>
-                        </td>
-                        <td className="px-4 py-3 text-ink-3">{date(order.createdAt)}</td>
-                        <td className="px-4 py-3"><Badge tone={ORDER_STATUS[order.status].tone}>{ORDER_STATUS[order.status].label}</Badge></td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {order.status === 'pending' ? (
-                              <>
-                                <Button size="sm" onClick={() => updateOrder(order, 'done')}><Check className="h-3.5 w-3.5" /> Bajarildi</Button>
-                                <Button size="sm" variant="ghost" onClick={() => updateOrder(order, 'cancelled')}><X className="h-3.5 w-3.5 text-error" /> Bekor</Button>
-                              </>
-                            ) : (
-                              <span className="text-[11.5px] text-ink-3">—</span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {tab === 'orders' ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 sm:gap-3.5">
+            <div className="flex shrink-0 flex-col gap-2 rounded-[14px] border border-line bg-white px-3 py-2.5 shadow-card lg:flex-row lg:flex-wrap lg:items-center">
+              <SearchInput
+                value={orderSearch}
+                onChange={setOrderSearch}
+                placeholder="Foydalanuvchi yoki mahsulot..."
+                className="min-w-0 flex-1 lg:max-w-xs"
+              />
+              <div className="overflow-x-auto no-scrollbar">
+                <Segmented
+                  className="w-full overflow-x-auto"
+                  value={orderStatus}
+                  onChange={setOrderStatus}
+                  options={[
+                    { value: 'all', label: 'Barchasi', count: orderCounts.all },
+                    { value: 'pending', label: 'Kutilmoqda', count: orderCounts.pending },
+                    { value: 'done', label: 'Bajarildi', count: orderCounts.done },
+                    { value: 'cancelled', label: 'Bekor qilindi', count: orderCounts.cancelled },
+                  ]}
+                />
               </div>
+              <Select value={orderPeriod} onChange={(event) => setOrderPeriod(event.target.value)} className="lg:w-[150px]">
+                <option value="7">Oxirgi 7 kun</option>
+                <option value="30">Oxirgi 30 kun</option>
+                <option value="90">Oxirgi 90 kun</option>
+                <option value="all">Barcha davr</option>
+              </Select>
+            </div>
 
-              <ul className="divide-y divide-line-2 md:hidden">
-                {filteredOrders.map((order) => (
-                  <li key={order.id} className="space-y-2.5 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <Avatar name={order.userName} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-semibold text-ink">{order.userName}</p>
-                          <p className="truncate text-[11.5px] text-ink-3">{order.productName}</p>
-                        </div>
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              {filteredOrders.length === 0 ? (
+                <div className="grid min-h-0 flex-1 place-items-center p-4">
+                  <EmptyState
+                    icon={<ShoppingBag className="h-5 w-5" />}
+                    title="Buyurtma topilmadi"
+                    text="Tanlangan filtrlar bo'yicha buyurtmalar mavjud emas."
+                  />
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto [contain:paint]">
+                  {pendingOrders.length > 0 ? (
+                    <div>
+                      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-line-2 bg-warning-bg/70 px-3 py-1.5 backdrop-blur-sm sm:px-4">
+                        <Clock3 className="h-3.5 w-3.5 text-warning" />
+                        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#92400e]">
+                          Kutilayotgan navbat · {number(pendingOrders.length)}
+                        </p>
                       </div>
-                      <Badge tone={ORDER_STATUS[order.status].tone}>{ORDER_STATUS[order.status].label}</Badge>
+                      <ul className="divide-y divide-line-2">
+                        {pendingOrders.map((order) => (
+                          <li key={order.id} className="px-3 py-2.5 sm:px-4">
+                            <div className="flex flex-wrap items-center gap-2.5">
+                              <Avatar name={order.userName} size="sm" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-[12.5px] font-semibold text-ink">
+                                  {order.userName}
+                                </p>
+                                <p className="truncate text-[10.5px] text-ink-3">
+                                  {order.productName} · {date(order.createdAt)}
+                                </p>
+                              </div>
+                              <span className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-bold tabular-nums text-[#b45309]">
+                                <Coins className="h-3.5 w-3.5" />
+                                {number(order.coins)}
+                              </span>
+                              <div className="flex w-full gap-1.5 sm:w-auto">
+                                <Button size="sm" className="flex-1 sm:flex-none" onClick={() => updateOrder(order, 'done')}>
+                                  <Check className="h-3.5 w-3.5" /> Bajarildi
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="flex-1 sm:flex-none"
+                                  onClick={() => updateOrder(order, 'cancelled')}
+                                >
+                                  <X className="h-3.5 w-3.5" /> Bekor
+                                </Button>
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-ink-3">
-                      <span className="font-mono">{order.id}</span>
-                      <span>{date(order.createdAt)}</span>
-                      <span className="inline-flex items-center gap-1 font-semibold text-[#b45309]"><Coins className="h-3.5 w-3.5" />{number(order.coins)}</span>
-                    </div>
-                    {order.status === 'pending' ? (
-                      <div className="flex gap-2">
-                        <Button size="sm" className="flex-1" onClick={() => updateOrder(order, 'done')}><Check className="h-3.5 w-3.5" /> Bajarildi</Button>
-                        <Button size="sm" variant="secondary" className="flex-1" onClick={() => updateOrder(order, 'cancelled')}><X className="h-3.5 w-3.5" /> Bekor qilish</Button>
+                  ) : null}
+
+                  {historyOrders.length > 0 ? (
+                    <div>
+                      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-line-2 bg-canvas/80 px-3 py-1.5 backdrop-blur-sm sm:px-4">
+                        <Check className="h-3.5 w-3.5 text-ink-3" />
+                        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                          Tarix · {number(historyOrders.length)}
+                        </p>
                       </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+                      <ul className="divide-y divide-line-2">
+                        {historyOrders.map((order) => (
+                          <li key={order.id} className="flex items-center gap-2.5 px-3 py-2.5 sm:px-4">
+                            <Avatar name={order.userName} size="sm" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[12.5px] font-semibold text-ink">
+                                {order.userName}
+                              </p>
+                              <p className="truncate font-mono text-[10px] text-ink-3">
+                                {order.id} · {date(order.createdAt)}
+                              </p>
+                            </div>
+                            <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold tabular-nums text-ink-2">
+                              <Coins className="h-3 w-3 text-[#b45309]" />
+                              {number(order.coins)}
+                            </span>
+                            <Badge tone={ORDER_STATUS[order.status].tone}>
+                              {ORDER_STATUS[order.status].label}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          </div>
+        ) : null}
+
+        <ProductDrawer product={editing} onClose={() => setEditing(null)} onSave={saveProduct} />
+
+        <Modal
+          open={deleteTarget !== null}
+          onClose={() => setDeleteTarget(null)}
+          title="Mahsulotni o'chirish"
+          description={deleteTarget?.name}
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+                Bekor qilish
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete}>
+                <Trash2 className="h-4 w-4" /> O'chirish
+              </Button>
             </>
-          )}
-        </div>
-      )}
-
-      <ProductDrawer product={editing} onClose={() => setEditing(null)} onSave={saveProduct} />
-
-      <Modal
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        title="Mahsulotni o'chirish"
-        description={deleteTarget?.name}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Bekor qilish</Button>
-            <Button variant="destructive" onClick={confirmDelete}><Trash2 className="h-4 w-4" /> O'chirish</Button>
-          </>
-        }
-      >
-        <p className="text-[13px] text-ink-2">
-          <b>{deleteTarget?.name}</b> mahsuloti va unga tegishli barcha buyurtmalar o'chiriladi. Bu amalni bekor qilib bo'lmaydi.
-        </p>
-      </Modal>
+          }
+        >
+          <p className="text-[13px] text-ink-2">
+            <b>{deleteTarget?.name}</b> mahsuloti va unga tegishli barcha buyurtmalar o'chiriladi. Bu
+            amalni bekor qilib bo'lmaydi.
+          </p>
+        </Modal>
+      </div>
     </PageTransition>
   )
 }
@@ -490,8 +668,12 @@ function ProductDrawer({
       subtitle={product?.id ? product.name : "Coin do'koniga yangi sovg'a qo'shing"}
       footer={
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
-          <Button onClick={() => current && onSave(current)}><Check className="h-4 w-4" /> Saqlash</Button>
+          <Button variant="ghost" onClick={onClose}>
+            Bekor qilish
+          </Button>
+          <Button onClick={() => current && onSave(current)}>
+            <Check className="h-4 w-4" /> Saqlash
+          </Button>
         </div>
       }
     >
@@ -518,13 +700,19 @@ function ProductDrawer({
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={current.image} alt="Mahsulot rasmi" className="h-24 w-24 rounded-lg object-cover" />
-                  <Button size="sm" variant="secondary" onClick={() => update({ image: null })}><X className="h-3.5 w-3.5" /> Rasmni olib tashlash</Button>
+                  <Button size="sm" variant="secondary" onClick={() => update({ image: null })}>
+                    <X className="h-3.5 w-3.5" /> Rasmni olib tashlash
+                  </Button>
                 </>
               ) : (
                 <>
-                  <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-soft text-brand-text text-[22px]">{current.emoji}</span>
+                  <span className="grid h-11 w-11 place-items-center rounded-full bg-brand-soft text-[22px] text-brand-text">
+                    {current.emoji}
+                  </span>
                   <p className="text-[12.5px] text-ink-3">Rasmni bu yerga tashlang yoki tanlang</p>
-                  <Button size="sm" variant="secondary" onClick={() => inputRef.current?.click()}><Upload className="h-3.5 w-3.5" /> Fayl tanlash</Button>
+                  <Button size="sm" variant="secondary" onClick={() => inputRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5" /> Fayl tanlash
+                  </Button>
                 </>
               )}
               <input
@@ -553,7 +741,9 @@ function ProductDrawer({
             <Field label="Kategoriya">
               <Select value={current.category} onChange={(event) => update({ category: event.target.value })}>
                 {categories.map((item) => (
-                  <option key={item} value={item}>{item}</option>
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </Select>
             </Field>

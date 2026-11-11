@@ -6,13 +6,14 @@ import {
   ArrowUpRight,
   BellRing,
   CalendarDays,
+  ChevronDown,
   Download,
   Eye,
   Receipt,
   RotateCcw,
   Wallet,
 } from 'lucide-react'
-import { PageHeader, PageTransition } from '@/components/layout/Page'
+import { PageTransition } from '@/components/layout/Page'
 import {
   Avatar,
   Badge,
@@ -26,12 +27,12 @@ import {
   SectionCard,
   Segmented,
   Select,
-  Tabs,
   Textarea,
+  cn,
   useToast,
   type BadgeTone,
 } from '@/components/ui'
-import { CumulativeChart, DailyRevenueChart } from '@/components/charts'
+import { CumulativeChart, DailyRevenueChart, Sparkline } from '@/components/charts'
 import { useAppStore } from '@/lib/store'
 import { expiringThisMonth, expiringThisWeek } from '@/lib/mock'
 import {
@@ -72,6 +73,11 @@ const STATUS: Record<TransactionStatus, { label: string; tone: BadgeTone }> = {
 
 type PaymentTab = 'transactions' | 'revenue'
 
+const TABS: Array<{ value: PaymentTab; label: string }> = [
+  { value: 'transactions', label: 'Tranzaksiyalar' },
+  { value: 'revenue', label: 'Daromad' },
+]
+
 export default function PaymentsPage() {
   const transactions = useAppStore((state) => state.transactions)
   const users = useAppStore((state) => state.users)
@@ -89,6 +95,7 @@ export default function PaymentsPage() {
   const [amountTo, setAmountTo] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [detail, setDetail] = useState<Transaction | null>(null)
   const [refundTarget, setRefundTarget] = useState<Transaction | null>(null)
   const [expiryOpen, setExpiryOpen] = useState(false)
@@ -137,6 +144,8 @@ export default function PaymentsPage() {
   const filteredSum = filtered
     .filter((transaction) => transaction.status === 'success')
     .reduce((sum, transaction) => sum + transaction.amount, 0)
+  const pendingCount = filtered.filter((transaction) => transaction.status === 'pending').length
+  const refundedCount = filtered.filter((transaction) => transaction.status === 'refunded').length
 
   const resetFilters = () => {
     setStatus('all')
@@ -223,7 +232,7 @@ export default function PaymentsPage() {
         transaction.providerTxId,
       ]),
     ])
-    toast({ title: 'Eksport tayyor', description: `${filtered.length} ta tranzaksiya CSV faylga saqlandi.`, tone: 'success' })
+    toast({ title: 'Eksport tayyor', description: `${filtered.length} ta tranzaksiya CSV faylga saqlandi.` })
   }
 
   const confirmRefund = () => {
@@ -232,7 +241,6 @@ export default function PaymentsPage() {
     toast({
       title: 'To\'lov qaytarildi',
       description: `${refundTarget.id} — ${money(refundTarget.amount)} qaytarilgan deb belgilandi.`,
-      tone: 'success',
     })
     setRefundTarget(null)
     setDetail(null)
@@ -255,7 +263,6 @@ export default function PaymentsPage() {
     toast({
       title: 'Bildirishnoma yuborildi',
       description: `${number(expiringThisWeek)} ta Pro foydalanuvchiga yuborildi.`,
-      tone: 'success',
     })
     setExpiryOpen(false)
   }
@@ -302,513 +309,590 @@ export default function PaymentsPage() {
 
   return (
     <PageTransition>
-      <PageHeader
-        title={
-          <span className="flex flex-wrap items-center gap-2.5">
-            To'lovlar <Badge tone="brand">{number(transactions.length)} ta</Badge>
-          </span>
-        }
-        subtitle="Tranzaksiyalar, qaytarishlar va daromad ko'rsatkichlari"
-        breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: "To'lovlar" }]}
-        actions={
-          <Button variant="secondary" onClick={exportCsv}>
-            <Download className="h-4 w-4" /> Eksport CSV
-          </Button>
-        }
-      />
-
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        className="mb-5"
-        items={[
-          { value: 'transactions', label: 'Tranzaksiyalar', count: transactions.length },
-          { value: 'revenue', label: 'Daromad' },
-        ]}
-      />
-
-      {tab === 'transactions' ? (
-        <div className="space-y-4">
-          <div className="space-y-3 rounded-xl border border-line bg-white p-3 shadow-card">
-            <div className="flex flex-wrap items-center gap-2">
-              <SearchInput
-                value={search}
-                onChange={(value) => {
-                  setSearch(value)
-                  setPage(1)
-                }}
-                placeholder="ID, foydalanuvchi yoki tranzaksiya ID..."
-                className="min-w-[220px] flex-1"
-              />
-              <Button variant="ghost" size="sm" onClick={resetFilters}>
-                Filtrlarni tozalash
-              </Button>
+      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
+              <span className="text-ink-3">Dashboard</span>
+              <span className="text-placeholder">/</span>
+              <span className="text-ink">To'lovlar</span>
             </div>
-
-            <div className="overflow-x-auto no-scrollbar">
-              <Segmented
-                value={status}
-                onChange={(value) => {
-                  setStatus(value)
-                  setPage(1)
-                }}
-                options={[
-                  { value: 'all', label: 'Barchasi', count: statusCounts.all ?? 0 },
-                  { value: 'success', label: 'Muvaffaqiyatli', count: statusCounts.success ?? 0 },
-                  { value: 'pending', label: 'Kutilmoqda', count: statusCounts.pending ?? 0 },
-                  { value: 'cancelled', label: 'Bekor qilindi', count: statusCounts.cancelled ?? 0 },
-                  { value: 'refunded', label: 'Qaytarilgan', count: statusCounts.refunded ?? 0 },
-                ]}
-              />
+            <div className="mt-0.5 flex min-w-0 items-center gap-2">
+              <h1 className="h2 truncate text-ink">To'lovlar</h1>
+              <Badge tone="gray">{number(transactions.length)} ta</Badge>
             </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
-              <Field label="Usul">
-                <Select
-                  value={method}
-                  onChange={(event) => {
-                    setMethod(event.target.value as 'all' | PaymentMethod)
-                    setPage(1)
-                  }}
-                >
-                  <option value="all">Barchasi</option>
-                  {(Object.keys(METHOD) as PaymentMethod[]).map((key) => (
-                    <option key={key} value={key}>
-                      {METHOD[key].label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Paket">
-                <Select
-                  value={packageId}
-                  onChange={(event) => {
-                    setPackageId(event.target.value as 'all' | PackageId)
-                    setPage(1)
-                  }}
-                >
-                  <option value="all">Barchasi</option>
-                  <option value="1m">1 oy</option>
-                  <option value="3m">3 oy</option>
-                  <option value="1y">1 yil</option>
-                </Select>
-              </Field>
-              <Field label="Dan">
-                <Input
-                  type="date"
-                  value={from}
-                  max={to || undefined}
-                  onChange={(event) => {
-                    setFrom(event.target.value)
-                    setPage(1)
-                  }}
-                />
-              </Field>
-              <Field label="Gacha">
-                <Input
-                  type="date"
-                  value={to}
-                  min={from || undefined}
-                  onChange={(event) => {
-                    setTo(event.target.value)
-                    setPage(1)
-                  }}
-                />
-              </Field>
-              <Field label="Miqdor (dan)">
-                <Input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  placeholder="0"
-                  value={amountFrom}
-                  onChange={(event) => {
-                    setAmountFrom(event.target.value)
-                    setPage(1)
-                  }}
-                />
-              </Field>
-              <Field label="Miqdor (gacha)">
-                <Input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  placeholder="500 000"
-                  value={amountTo}
-                  onChange={(event) => {
-                    setAmountTo(event.target.value)
-                    setPage(1)
-                  }}
-                />
-              </Field>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-3">
-              <span>
-                Topildi: <span className="font-semibold text-ink-2">{number(filtered.length)}</span> ta
-              </span>
-              <span>
-                Muvaffaqiyatli summa: <span className="font-semibold text-ink-2">{money(filteredSum)}</span>
-              </span>
-            </div>
+            <p className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">
+              Tranzaksiyalar, qaytarishlar va daromad ko'rsatkichlari
+            </p>
           </div>
+          <Button variant="secondary" onClick={exportCsv} className="h-10 sm:h-11">
+            <Download className="h-4 w-4" />
+            <span className="max-[360px]:hidden">Eksport CSV</span>
+          </Button>
+        </div>
 
-          <SectionCard
-            title="Tranzaksiyalar"
-            subtitle="Barcha to'lovlar va ularning holati"
-            bodyClassName="p-0"
-          >
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[980px] text-left">
-                <thead>
-                  <tr className="border-b border-line-2 bg-canvas/60 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">
-                    <th className="px-4 py-2.5 font-semibold">ID</th>
-                    <th className="px-4 py-2.5 font-semibold">Foydalanuvchi</th>
-                    <th className="px-4 py-2.5 font-semibold">Paket</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Summa</th>
-                    <th className="px-4 py-2.5 font-semibold">Usul</th>
-                    <th className="px-4 py-2.5 font-semibold">Sana</th>
-                    <th className="px-4 py-2.5 font-semibold">Status</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Amallar</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line-2">
-                  {rows.map((transaction) => (
-                    <tr key={transaction.id} className="text-[12.5px] transition hover:bg-canvas">
-                      <td className="px-4 py-2.5">
-                        <span className="font-mono text-[11px] text-ink-3">{transaction.id}</span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className="flex items-center gap-2">
-                          <Avatar name={transaction.userName} size="sm" tone="bg-brand-container text-brand-active" />
-                          <span className="font-semibold text-ink">{transaction.userName}</span>
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-ink-2">{PACKAGE_LABEL[transaction.packageId]}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold tabular text-ink">{money(transaction.amount)}</td>
-                      <td className="px-4 py-2.5">{methodBadge(transaction.method)}</td>
-                      <td className="px-4 py-2.5">
-                        <p className="text-ink-2">{date(transaction.createdAt)}</p>
-                        <p className="text-[11px] text-ink-3">{relative(transaction.createdAt)}</p>
-                      </td>
-                      <td className="px-4 py-2.5">{statusBadge(transaction.status)}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex justify-end">{rowActions(transaction)}</div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="flex shrink-0 gap-4 border-b border-line" role="tablist" aria-label="To'lovlar bo'limlari">
+          {TABS.map((item) => {
+            const active = tab === item.value
+            return (
+              <button
+                key={item.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(item.value)}
+                className={cn(
+                  'relative h-9 text-[12.5px] font-semibold transition',
+                  active ? 'text-ink' : 'text-ink-3 hover:text-ink-2',
+                )}
+              >
+                {item.label}
+                {item.value === 'transactions' ? (
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-ink-3">
+                    {number(transactions.length)}
+                  </span>
+                ) : null}
+                <span
+                  className={cn(
+                    'absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-brand transition-opacity',
+                    active ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+              </button>
+            )
+          })}
+        </div>
+
+        {tab === 'transactions' ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 sm:gap-3.5">
+            <div className="flex shrink-0 flex-col gap-2 rounded-[14px] border border-line bg-white px-3 py-2.5 shadow-card">
+              <div className="flex flex-wrap items-center gap-2">
+                <SearchInput
+                  value={search}
+                  onChange={(value) => {
+                    setSearch(value)
+                    setPage(1)
+                  }}
+                  placeholder="ID, foydalanuvchi yoki tranzaksiya ID..."
+                  className="min-w-0 flex-1"
+                />
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  Tozalash
+                </Button>
+              </div>
+
+              <div className="overflow-x-auto no-scrollbar">
+                <Segmented
+                  className="w-full overflow-x-auto"
+                  value={status}
+                  onChange={(value) => {
+                    setStatus(value)
+                    setPage(1)
+                  }}
+                  options={[
+                    { value: 'all', label: 'Barchasi', count: statusCounts.all ?? 0 },
+                    { value: 'success', label: 'Muvaffaqiyatli', count: statusCounts.success ?? 0 },
+                    { value: 'pending', label: 'Kutilmoqda', count: statusCounts.pending ?? 0 },
+                    { value: 'cancelled', label: 'Bekor qilindi', count: statusCounts.cancelled ?? 0 },
+                    { value: 'refunded', label: 'Qaytarilgan', count: statusCounts.refunded ?? 0 },
+                  ]}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                <Field label="Usul">
+                  <Select
+                    value={method}
+                    onChange={(event) => {
+                      setMethod(event.target.value as 'all' | PaymentMethod)
+                      setPage(1)
+                    }}
+                  >
+                    <option value="all">Barchasi</option>
+                    {(Object.keys(METHOD) as PaymentMethod[]).map((key) => (
+                      <option key={key} value={key}>
+                        {METHOD[key].label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Paket">
+                  <Select
+                    value={packageId}
+                    onChange={(event) => {
+                      setPackageId(event.target.value as 'all' | PackageId)
+                      setPage(1)
+                    }}
+                  >
+                    <option value="all">Barchasi</option>
+                    <option value="1m">1 oy</option>
+                    <option value="3m">3 oy</option>
+                    <option value="1y">1 yil</option>
+                  </Select>
+                </Field>
+                <div
+                  className={cn(
+                    'col-span-2 grid grid-cols-2 gap-2 sm:contents',
+                    filtersOpen ? '' : 'hidden',
+                  )}
+                >
+                  <Field label="Dan">
+                    <Input
+                      type="date"
+                      value={from}
+                      max={to || undefined}
+                      onChange={(event) => {
+                        setFrom(event.target.value)
+                        setPage(1)
+                      }}
+                    />
+                  </Field>
+                  <Field label="Gacha">
+                    <Input
+                      type="date"
+                      value={to}
+                      min={from || undefined}
+                      onChange={(event) => {
+                        setTo(event.target.value)
+                        setPage(1)
+                      }}
+                    />
+                  </Field>
+                  <Field label="Miqdor (dan)">
+                    <Input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={amountFrom}
+                      onChange={(event) => {
+                        setAmountFrom(event.target.value)
+                        setPage(1)
+                      }}
+                    />
+                  </Field>
+                  <Field label="Miqdor (gacha)">
+                    <Input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      placeholder="500 000"
+                      value={amountTo}
+                      onChange={(event) => {
+                        setAmountTo(event.target.value)
+                        setPage(1)
+                      }}
+                    />
+                  </Field>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((value) => !value)}
+                className="inline-flex h-8 items-center gap-1 self-start text-[11.5px] font-semibold text-ink-3 transition hover:text-ink sm:hidden"
+              >
+                <ChevronDown
+                  className={cn('h-3.5 w-3.5 transition-transform', filtersOpen && 'rotate-180')}
+                />
+                Sana va miqdor bo'yicha filtr
+              </button>
             </div>
 
-            <div className="divide-y divide-line-2 md:hidden">
-              {rows.map((transaction) => (
-                <div key={transaction.id} className="space-y-2.5 px-4 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-mono text-[10.5px] text-ink-3">{transaction.id}</p>
-                      <p className="mt-0.5 truncate text-[13px] font-semibold text-ink">{transaction.userName}</p>
-                      <p className="text-[11px] text-ink-3">
-                        {PACKAGE_LABEL[transaction.packageId]} · {dateTime(transaction.createdAt)}
-                      </p>
-                    </div>
-                    {statusBadge(transaction.status)}
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {methodBadge(transaction.method)}
-                      <span className="text-[13px] font-bold tabular text-ink">{money(transaction.amount)}</span>
-                    </div>
-                  </div>
-                  {rowActions(transaction)}
+            <div className="grid shrink-0 grid-cols-2 divide-x divide-line-2 overflow-hidden rounded-[14px] border border-line bg-white shadow-card sm:grid-cols-4">
+              {[
+                { label: 'Topildi', value: number(filtered.length), tone: 'text-ink' },
+                { label: 'Muvaffaqiyatli summa', value: money(filteredSum), tone: 'text-ink' },
+                { label: 'Kutilmoqda', value: number(pendingCount), tone: 'text-warning' },
+                { label: 'Qaytarilgan', value: number(refundedCount), tone: 'text-ink-3' },
+              ].map((cell) => (
+                <div key={cell.label} className="min-w-0 px-3 py-2">
+                  <p className="truncate text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                    {cell.label}
+                  </p>
+                  <p className={cn('mt-0.5 truncate text-[16px] font-geist leading-none tabular-nums', cell.tone)}>
+                    {cell.value}
+                  </p>
                 </div>
               ))}
             </div>
 
-            {rows.length === 0 ? (
-              <p className="px-5 py-10 text-center text-[13px] text-ink-3">
-                Tanlangan filtrlar bo'yicha tranzaksiya topilmadi.
-              </p>
-            ) : null}
-
-            <div className="border-t border-line-2 px-4 py-3">
-              <Pagination
-                page={currentPage}
-                pageCount={pageCount}
-                onChange={setPage}
-                total={filtered.length}
-                pageSize={PAGE_SIZE}
-                label="tranzaksiya"
-              />
-            </div>
-          </SectionCard>
-        </div>
-      ) : null}
-
-      {tab === 'revenue' ? (
-        <div className="space-y-4 sm:space-y-5">
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-[#14532d] via-[#15803d] to-[#16a34a] p-5 text-white shadow-brand sm:p-6">
-            <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                  <Wallet className="h-4 w-4" /> Bu oy daromad · {dateLong(MOCK_NOW)}
-                </p>
-                <p className="mt-2 font-display text-[32px] font-extrabold tracking-[-0.02em] tabular sm:text-[40px]">
-                  {money(finance.current)}
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-white/80">
-                  <span>
-                    O'tgan oy: <span className="font-semibold text-white">{money(finance.previous)}</span>
-                  </span>
-                  <span>
-                    Farq:{' '}
-                    <span className="font-semibold text-white">
-                      {finance.diff >= 0 ? '+' : ''}
-                      {money(finance.diff)}
-                    </span>
-                  </span>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-[13px] font-bold backdrop-blur">
-                <ArrowUpRight className="h-4 w-4" /> +{percent(finance.growth, 1)}
-              </span>
-            </div>
-          </Card>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <SectionCard title="Kun bo'yicha daromad" subtitle="Joriy oyning har bir kuni">
-              <DailyRevenueChart data={daily} />
-            </SectionCard>
-            <SectionCard title="Kumulativ daromad" subtitle="Oy boshidan jami yig'ilgan summa">
-              <CumulativeChart data={cumulative} />
-            </SectionCard>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-3">
-            <SectionCard
-              className="xl:col-span-2"
-              title="Yaqin tugaydigan obunalar"
-              subtitle="Pro obunalar muddati haqida ogohlantirish"
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Card className="bg-warning-bg/60 shadow-none">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-[#92400e]">Bu hafta</p>
-                  <p className="mt-2 font-display text-[28px] font-extrabold tracking-[-0.02em] text-ink">
-                    {number(expiringThisWeek)} obuna
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              <div className="hidden min-h-0 flex-1 overflow-y-auto [contain:paint] md:block">
+                <table className="w-full text-left">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="border-b border-line-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+                      <th className="px-4 py-2 font-semibold">ID</th>
+                      <th className="py-2 pr-3 font-semibold">Foydalanuvchi</th>
+                      <th className="py-2 pr-3 font-semibold">Paket</th>
+                      <th className="py-2 pr-3 text-right font-semibold">Summa</th>
+                      <th className="py-2 pr-3 font-semibold">Usul</th>
+                      <th className="py-2 pr-3 font-semibold">Sana</th>
+                      <th className="py-2 pr-3 font-semibold">Status</th>
+                      <th className="px-4 py-2 text-right font-semibold">Amallar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line-2">
+                    {rows.map((transaction) => (
+                      <tr key={transaction.id} className="text-[12.5px] transition hover:bg-canvas">
+                        <td className="px-4 py-2.5">
+                          <span className="font-mono text-[10.5px] text-ink-3">{transaction.id}</span>
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <span className="flex items-center gap-2">
+                            <Avatar name={transaction.userName} size="sm" tone="bg-brand-container text-brand-active" />
+                            <span className="truncate font-semibold text-ink">{transaction.userName}</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-3 text-ink-2">{PACKAGE_LABEL[transaction.packageId]}</td>
+                        <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-ink">
+                          {money(transaction.amount)}
+                        </td>
+                        <td className="py-2.5 pr-3">{methodBadge(transaction.method)}</td>
+                        <td className="py-2.5 pr-3">
+                          <p className="text-ink-2">{date(transaction.createdAt)}</p>
+                          <p className="text-[10.5px] text-ink-3">{relative(transaction.createdAt)}</p>
+                        </td>
+                        <td className="py-2.5 pr-3">{statusBadge(transaction.status)}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex justify-end">{rowActions(transaction)}</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rows.length === 0 ? (
+                  <p className="px-5 py-10 text-center text-[13px] text-ink-3">
+                    Tanlangan filtrlar bo'yicha tranzaksiya topilmadi.
                   </p>
-                  <p className="mt-1 text-[11.5px] text-ink-3">7 kun ichida tugaydi</p>
-                </Card>
-                <Card className="shadow-none">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-ink-3">Keyingi 30 kun</p>
-                  <p className="mt-2 font-display text-[28px] font-extrabold tracking-[-0.02em] text-ink">
-                    {number(expiringThisMonth)} obuna
-                  </p>
-                  <p className="mt-1 text-[11.5px] text-ink-3">30 kun ichida tugaydi</p>
-                </Card>
+                ) : null}
               </div>
 
-              <div className="mt-4">
-                <p className="mb-2 text-[12px] font-semibold text-ink-2">Bu hafta tugaydiganlar</p>
-                <ul className="divide-y divide-line-2">
-                  {expiringUsers.map((user) => (
-                    <li key={user.id} className="flex items-center gap-2.5 py-2">
-                      <Avatar name={user.name} size="sm" tone={user.tone} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12.5px] font-semibold text-ink">{user.name}</p>
-                        <p className="truncate text-[11px] text-ink-3">
-                          {user.planPackage ? PACKAGE_LABEL[user.planPackage] : 'Pro'} ·{' '}
-                          {user.planEndsAt ? date(user.planEndsAt) : '—'}
+              <div className="min-h-0 flex-1 divide-y divide-line-2 overflow-y-auto [contain:paint] md:hidden">
+                {rows.map((transaction) => (
+                  <div key={transaction.id} className="space-y-2 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[10px] text-ink-3">{transaction.id}</p>
+                        <p className="mt-0.5 truncate text-[12.5px] font-semibold text-ink">
+                          {transaction.userName}
+                        </p>
+                        <p className="text-[10.5px] text-ink-3">
+                          {PACKAGE_LABEL[transaction.packageId]} · {dateTime(transaction.createdAt)}
                         </p>
                       </div>
-                      <Badge tone="warning">{user.planEndsAt ? relative(user.planEndsAt) : '—'}</Badge>
-                    </li>
-                  ))}
-                </ul>
+                      {statusBadge(transaction.status)}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {methodBadge(transaction.method)}
+                      <span className="text-[13px] font-bold tabular-nums text-ink">
+                        {money(transaction.amount)}
+                      </span>
+                    </div>
+                    {rowActions(transaction)}
+                  </div>
+                ))}
+                {rows.length === 0 ? (
+                  <p className="px-5 py-10 text-center text-[13px] text-ink-3">
+                    Tanlangan filtrlar bo'yicha tranzaksiya topilmadi.
+                  </p>
+                ) : null}
               </div>
-            </SectionCard>
 
-            <Card className="flex flex-col justify-between gap-4 bg-gradient-to-br from-brand-soft to-white">
-              <div>
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-brand shadow-card">
-                  <BellRing className="h-5 w-5" />
-                </span>
-                <p className="h4 mt-3 text-ink">Obuna tugashi eslatmasi</p>
-                <p className="mt-1.5 text-[12.5px] text-ink-3">
-                  Bu hafta tugaydigan {number(expiringThisWeek)} ta Pro obunachiga push va ilova ichida
-                  bildirishnoma yuboring.
-                </p>
-              </div>
-              <Button className="w-full" onClick={() => setExpiryOpen(true)}>
-                <BellRing className="h-4 w-4" /> Bildirishnoma yuborish
-              </Button>
-            </Card>
+              <footer className="shrink-0 border-t border-line-2 px-3 py-2">
+                <Pagination
+                  page={currentPage}
+                  pageCount={pageCount}
+                  onChange={setPage}
+                  total={filtered.length}
+                  pageSize={PAGE_SIZE}
+                  label="tranzaksiya"
+                />
+              </footer>
+            </section>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      <Modal
-        open={detail !== null && refundTarget === null}
-        onClose={() => setDetail(null)}
-        title="Tranzaksiya tafsiloti"
-        description={detail?.id}
-        footer={
-          detail ? (
+        {tab === 'revenue' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [contain:paint]">
+            <div className="space-y-2.5 sm:space-y-3.5">
+              <section className="overflow-hidden rounded-[16px] border border-line bg-white shadow-card">
+                <div className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                      <Wallet className="h-3 w-3" /> Bu oy daromad · {dateLong(MOCK_NOW)}
+                    </p>
+                    <p className="mt-1.5 font-geist text-[30px] font-bold leading-none tracking-[-0.02em] tabular-nums text-ink sm:text-[38px]">
+                      {money(finance.current)}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-3">
+                      <span>
+                        O'tgan oy:{' '}
+                        <span className="font-semibold text-ink-2">{money(finance.previous)}</span>
+                      </span>
+                      <span>
+                        Farq:{' '}
+                        <span className={cn('font-semibold', finance.diff >= 0 ? 'text-success' : 'text-error')}>
+                          {finance.diff >= 0 ? '+' : ''}
+                          {money(finance.diff)}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2.5 py-1 text-[12px] font-bold text-success">
+                      <ArrowUpRight className="h-3.5 w-3.5" /> +{percent(finance.growth, 1)}
+                    </span>
+                    <div className="w-32 sm:w-40">
+                      <Sparkline data={cumulative.map((point) => point.value)} color="#16a34a" height={40} />
+                      <p className="mt-0.5 text-center text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                        Oy kumulativi
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div className="grid gap-2.5 sm:gap-3.5 xl:grid-cols-2">
+                <SectionCard title="Kun bo'yicha daromad" subtitle="Joriy oyning har bir kuni">
+                  <DailyRevenueChart data={daily} />
+                </SectionCard>
+                <SectionCard title="Kumulativ daromad" subtitle="Oy boshidan jami yig'ilgan summa">
+                  <CumulativeChart data={cumulative} />
+                </SectionCard>
+              </div>
+
+              <div className="grid gap-2.5 sm:gap-3.5 xl:grid-cols-3">
+                <SectionCard
+                  className="xl:col-span-2"
+                  title="Yaqin tugaydigan obunalar"
+                  subtitle="Pro obunalar muddati haqida ogohlantirish"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-[12px] bg-warning-bg/60 px-3 py-2.5">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-[#92400e]">
+                        Bu hafta
+                      </p>
+                      <p className="mt-1 font-display text-[20px] font-extrabold tabular-nums text-ink">
+                        {number(expiringThisWeek)}
+                      </p>
+                      <p className="text-[10.5px] text-ink-3">7 kun ichida tugaydi</p>
+                    </div>
+                    <div className="rounded-[12px] bg-canvas px-3 py-2.5">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                        Keyingi 30 kun
+                      </p>
+                      <p className="mt-1 font-display text-[20px] font-extrabold tabular-nums text-ink">
+                        {number(expiringThisMonth)}
+                      </p>
+                      <p className="text-[10.5px] text-ink-3">30 kun ichida tugaydi</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="mb-1 text-[11px] font-semibold text-ink-2">Bu hafta tugaydiganlar</p>
+                    <ul className="divide-y divide-line-2">
+                      {expiringUsers.map((user) => (
+                        <li key={user.id} className="flex items-center gap-2.5 py-2">
+                          <Avatar name={user.name} size="sm" tone={user.tone} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] font-semibold text-ink">{user.name}</p>
+                            <p className="truncate text-[10.5px] text-ink-3">
+                              {user.planPackage ? PACKAGE_LABEL[user.planPackage] : 'Pro'} ·{' '}
+                              {user.planEndsAt ? date(user.planEndsAt) : '—'}
+                            </p>
+                          </div>
+                          <Badge tone="warning">{user.planEndsAt ? relative(user.planEndsAt) : '—'}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </SectionCard>
+
+                <Card className="flex flex-col justify-between gap-3 bg-gradient-to-br from-brand-soft to-white">
+                  <div>
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-brand shadow-card">
+                      <BellRing className="h-5 w-5" />
+                    </span>
+                    <p className="h4 mt-2.5 text-ink">Obuna tugashi eslatmasi</p>
+                    <p className="mt-1 text-[12px] text-ink-3">
+                      Bu hafta tugaydigan {number(expiringThisWeek)} ta Pro obunachiga push va ilova
+                      ichida bildirishnoma yuboring.
+                    </p>
+                  </div>
+                  <Button className="w-full" onClick={() => setExpiryOpen(true)}>
+                    <BellRing className="h-4 w-4" /> Bildirishnoma yuborish
+                  </Button>
+                </Card>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <Modal
+          open={detail !== null && refundTarget === null}
+          onClose={() => setDetail(null)}
+          title="Tranzaksiya tafsiloti"
+          description={detail?.id}
+          footer={
+            detail ? (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    toast({
+                      title: 'Chek yuborildi',
+                      description: `${detail.userName} foydalanuvchisiga chek Telegram orqali yuborildi.`,
+                    })
+                  }}
+                >
+                  <Receipt className="h-4 w-4" /> Chek yuborish
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={detail.status !== 'success'}
+                  onClick={() => {
+                    setRefundTarget(detail)
+                    setDetail(null)
+                  }}
+                >
+                  <RotateCcw className="h-4 w-4" /> Qaytarish
+                </Button>
+              </>
+            ) : null
+          }
+        >
+          {detail ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 rounded-[12px] border border-line-2 bg-canvas px-3 py-2.5">
+                <Avatar name={detail.userName} tone="bg-brand-container text-brand-active" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold text-ink">{detail.userName}</p>
+                  <p className="text-[11px] text-ink-3">{PACKAGE_LABEL[detail.packageId]}</p>
+                </div>
+                {statusBadge(detail.status)}
+              </div>
+
+              <dl className="divide-y divide-line-2 text-[12.5px]">
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-ink-3">ID</dt>
+                  <dd className="font-mono text-[11px] font-semibold text-ink">{detail.id}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-ink-3">Paket</dt>
+                  <dd className="font-semibold text-ink">{PACKAGE_LABEL[detail.packageId]}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-ink-3">Summa</dt>
+                  <dd className="font-semibold tabular-nums text-ink">{money(detail.amount)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-ink-3">To'lov usuli</dt>
+                  <dd>{methodBadge(detail.method)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-ink-3">Tranzaksiya ID</dt>
+                  <dd className="font-mono text-[11px] font-semibold text-ink">{detail.providerTxId}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-ink-3">Sana</dt>
+                  <dd className="font-semibold text-ink">{dateTime(detail.createdAt)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <dt className="text-ink-3">Status</dt>
+                  <dd>{statusBadge(detail.status)}</dd>
+                </div>
+              </dl>
+
+              <div className="flex items-start gap-2 rounded-[10px] bg-canvas px-3 py-2 text-[11px] text-ink-3">
+                <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                To'lov {relative(detail.createdAt)} amalga oshirilgan.
+              </div>
+            </div>
+          ) : null}
+        </Modal>
+
+        <Modal
+          open={refundTarget !== null}
+          onClose={() => setRefundTarget(null)}
+          title="To'lovni qaytarish"
+          description={refundTarget ? `${refundTarget.id} · ${refundTarget.userName}` : undefined}
+          size="sm"
+          footer={
             <>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  toast({
-                    title: 'Chek yuborildi',
-                    description: `${detail.userName} foydalanuvchisiga chek Telegram orqali yuborildi.`,
-                    tone: 'success',
-                  })
-                }}
-              >
-                <Receipt className="h-4 w-4" /> Chek yuborish
+              <Button variant="ghost" onClick={() => setRefundTarget(null)}>
+                Bekor qilish
               </Button>
-              <Button
-                variant="destructive"
-                disabled={detail.status !== 'success'}
-                onClick={() => {
-                  setRefundTarget(detail)
-                  setDetail(null)
-                }}
-              >
-                <RotateCcw className="h-4 w-4" /> Qaytarish
+              <Button variant="destructive" onClick={confirmRefund}>
+                <RotateCcw className="h-4 w-4" /> Ha, qaytarish
               </Button>
             </>
-          ) : null
-        }
-      >
-        {detail ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-xl border border-line-2 bg-canvas px-3.5 py-3">
-              <Avatar name={detail.userName} tone="bg-brand-container text-brand-active" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-semibold text-ink">{detail.userName}</p>
-                <p className="text-[11.5px] text-ink-3">{PACKAGE_LABEL[detail.packageId]}</p>
+          }
+        >
+          {refundTarget ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 rounded-[10px] bg-warning-bg px-3 py-2.5 text-[12px] text-[#92400e]">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <p>
+                  <span className="font-bold">{money(refundTarget.amount)}</span> foydalanuvchiga
+                  qaytariladi va tranzaksiya «Qaytarilgan» holatiga o'tadi. Bu amalni bekor qilish
+                  mumkin emas.
+                </p>
               </div>
-              {statusBadge(detail.status)}
-            </div>
-
-            <dl className="divide-y divide-line-2 text-[13px]">
-              <div className="flex items-center justify-between gap-3 py-2">
-                <dt className="text-ink-3">ID</dt>
-                <dd className="font-mono text-[11.5px] font-semibold text-ink">{detail.id}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-2">
-                <dt className="text-ink-3">Paket</dt>
-                <dd className="font-semibold text-ink">{PACKAGE_LABEL[detail.packageId]}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-2">
-                <dt className="text-ink-3">Summa</dt>
-                <dd className="font-semibold tabular text-ink">{money(detail.amount)}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-2">
-                <dt className="text-ink-3">To'lov usuli</dt>
-                <dd>{methodBadge(detail.method)}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-2">
-                <dt className="text-ink-3">Tranzaksiya ID</dt>
-                <dd className="font-mono text-[11.5px] font-semibold text-ink">{detail.providerTxId}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-2">
-                <dt className="text-ink-3">Sana</dt>
-                <dd className="font-semibold text-ink">{dateTime(detail.createdAt)}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-2">
-                <dt className="text-ink-3">Status</dt>
-                <dd>{statusBadge(detail.status)}</dd>
-              </div>
-            </dl>
-
-            <div className="flex items-start gap-2 rounded-lg bg-canvas px-3 py-2.5 text-[11.5px] text-ink-3">
-              <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              To'lov {relative(detail.createdAt)} amalga oshirilgan.
-            </div>
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        open={refundTarget !== null}
-        onClose={() => setRefundTarget(null)}
-        title="To'lovni qaytarish"
-        description={refundTarget ? `${refundTarget.id} · ${refundTarget.userName}` : undefined}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setRefundTarget(null)}>
-              Bekor qilish
-            </Button>
-            <Button variant="destructive" onClick={confirmRefund}>
-              <RotateCcw className="h-4 w-4" /> Ha, qaytarish
-            </Button>
-          </>
-        }
-      >
-        {refundTarget ? (
-          <div className="space-y-3">
-            <div className="flex items-start gap-2 rounded-lg bg-warning-bg px-3.5 py-3 text-[12.5px] text-[#92400e]">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>
-                <span className="font-bold">{money(refundTarget.amount)}</span> foydalanuvchiga qaytariladi va
-                tranzaksiya «Qaytarilgan» holatiga o'tadi. Bu amalni bekor qilish mumkin emas.
+              <p className="text-[12px] text-ink-3">
+                Paket:{' '}
+                <span className="font-semibold text-ink">{PACKAGE_LABEL[refundTarget.packageId]}</span>{' '}
+                · Usul:{' '}
+                <span className="font-semibold text-ink">{METHOD[refundTarget.method].label}</span>
               </p>
             </div>
-            <p className="text-[12.5px] text-ink-3">
-              Paket: <span className="font-semibold text-ink">{PACKAGE_LABEL[refundTarget.packageId]}</span> · Usul:{' '}
-              <span className="font-semibold text-ink">{METHOD[refundTarget.method].label}</span>
-            </p>
-          </div>
-        ) : null}
-      </Modal>
+          ) : null}
+        </Modal>
 
-      <Modal
-        open={expiryOpen}
-        onClose={() => setExpiryOpen(false)}
-        title="Obuna tugashi eslatmasi"
-        description={`${number(expiringThisWeek)} ta Pro obunachiga yuboriladi`}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setExpiryOpen(false)}>
-              Bekor qilish
-            </Button>
-            <Button onClick={sendExpiryNotification}>
-              <BellRing className="h-4 w-4" /> Yuborish
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Field label="Sarlavha" required>
-            <Input value={push.title} onChange={(event) => setPush({ ...push, title: event.target.value })} />
-          </Field>
-          <Field label="Matn" required>
-            <Textarea rows={4} value={push.body} onChange={(event) => setPush({ ...push, body: event.target.value })} />
-          </Field>
-          <Field label="Havola">
-            <Input value={push.link} onChange={(event) => setPush({ ...push, link: event.target.value })} />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Auditoriya">
-              <Select value={push.audience} onChange={(event) => setPush({ ...push, audience: event.target.value })}>
-                <option value="pro">Pro obunachilar</option>
-                <option value="all">Barcha foydalanuvchilar</option>
-                <option value="free">Free foydalanuvchilar</option>
-              </Select>
+        <Modal
+          open={expiryOpen}
+          onClose={() => setExpiryOpen(false)}
+          title="Obuna tugashi eslatmasi"
+          description={`${number(expiringThisWeek)} ta Pro obunachiga yuboriladi`}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setExpiryOpen(false)}>
+                Bekor qilish
+              </Button>
+              <Button onClick={sendExpiryNotification}>
+                <BellRing className="h-4 w-4" /> Yuborish
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <Field label="Sarlavha" required>
+              <Input value={push.title} onChange={(event) => setPush({ ...push, title: event.target.value })} />
             </Field>
-            <Field label="Turi">
-              <Select value={push.type} onChange={(event) => setPush({ ...push, type: event.target.value })}>
-                <option value="both">Push + ilova ichida</option>
-                <option value="push">Faqat push</option>
-                <option value="inapp">Faqat ilova ichida</option>
-              </Select>
+            <Field label="Matn" required>
+              <Textarea rows={4} value={push.body} onChange={(event) => setPush({ ...push, body: event.target.value })} />
             </Field>
+            <Field label="Havola">
+              <Input value={push.link} onChange={(event) => setPush({ ...push, link: event.target.value })} />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Auditoriya">
+                <Select value={push.audience} onChange={(event) => setPush({ ...push, audience: event.target.value })}>
+                  <option value="pro">Pro obunachilar</option>
+                  <option value="all">Barcha foydalanuvchilar</option>
+                  <option value="free">Free foydalanuvchilar</option>
+                </Select>
+              </Field>
+              <Field label="Turi">
+                <Select value={push.type} onChange={(event) => setPush({ ...push, type: event.target.value })}>
+                  <option value="both">Push + ilova ichida</option>
+                  <option value="push">Faqat push</option>
+                  <option value="inapp">Faqat ilova ichida</option>
+                </Select>
+              </Field>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      </div>
     </PageTransition>
   )
 }
