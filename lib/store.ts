@@ -10,6 +10,7 @@ import type {
   CertType,
   Certificate,
   LogEntry,
+  NotificationAutomation,
   NotificationRecord,
   NotificationType,
   Olympiad,
@@ -38,6 +39,41 @@ import { MOCK_NOW } from './format'
 const uid = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`
 const nowIso = () => new Date().toISOString()
 
+type Snapshot = Pick<
+  AppStore,
+  | 'users'
+  | 'subjects'
+  | 'topics'
+  | 'videos'
+  | 'tests'
+  | 'olympiads'
+  | 'transactions'
+  | 'products'
+  | 'orders'
+  | 'promos'
+  | 'campaigns'
+  | 'tickets'
+  | 'certificates'
+  | 'certTemplates'
+  | 'notifications'
+  | 'automations'
+  | 'logs'
+  | 'admins'
+  | 'roles'
+  | 'settings'
+  | 'profile'
+>
+
+const backupSnapshots = new Map<string, Snapshot>()
+
+const withoutTestIds = (olympiads: Olympiad[], removed: Set<string>): Olympiad[] =>
+  removed.size === 0
+    ? olympiads
+    : olympiads.map((olympiad) => ({
+        ...olympiad,
+        questionIds: olympiad.questionIds.filter((id) => !removed.has(id)),
+      }))
+
 type Lang = 'uz' | 'ru'
 
 interface AppStore {
@@ -57,6 +93,7 @@ interface AppStore {
   certificates: Certificate[]
   certTemplates: CertTemplate[]
   notifications: NotificationRecord[]
+  automations: NotificationAutomation[]
   logs: LogEntry[]
   backups: Backup[]
   admins: AdminUser[]
@@ -93,6 +130,7 @@ interface AppStore {
   toggleOlympiadQuestion: (id: string, testId: string) => void
 
   refundTransaction: (id: string) => void
+  restoreBackup: (id: string) => boolean
   upsertProduct: (product: Product) => void
   deleteProduct: (id: string) => void
   setOrderStatus: (id: string, status: OrderStatus) => void
@@ -110,15 +148,25 @@ interface AppStore {
   resendCertificate: (id: string) => void
   updateTemplate: (template: CertTemplate) => void
 
-  sendNotification: (payload: { title: string; body: string; link: string; audience: NotificationRecord['audience']; type: NotificationType; recipients: number; scheduled: boolean }) => void
+  sendNotification: (payload: { title: string; body: string; link: string; audience: NotificationRecord['audience']; type: NotificationType; recipients: number; scheduled: boolean; scheduledAt?: string }) => void
+  updateNotification: (id: string, patch: Partial<NotificationRecord>) => void
   deleteNotification: (id: string) => void
+  upsertAutomation: (automation: NotificationAutomation) => void
+  deleteAutomation: (id: string) => void
+  toggleAutomation: (id: string) => void
+  runAutomation: (id: string) => number
 
   addLog: (entry: Omit<LogEntry, 'id'>) => void
+  clearLogs: () => void
   createBackup: () => void
+  deleteBackup: (id: string) => void
 
   upsertAdmin: (admin: AdminUser) => void
+  deleteAdmin: (id: string) => void
   updateAdminStatus: (id: string, status: AdminUser['status']) => void
   updateRolePermission: (roleId: string, key: PermissionKey, value: boolean) => void
+  upsertRole: (role: Role) => void
+  deleteRole: (id: string) => boolean
 
   updateSettings: (patch: Partial<AppSettings>) => void
   updateProfile: (patch: Partial<Profile>) => void
@@ -141,6 +189,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   certificates: seed.certificates,
   certTemplates: seed.certTemplates,
   notifications: seed.notifications,
+  automations: seed.notificationAutomations,
   logs: seed.logs,
   backups: seed.backups,
   admins: seed.admins,
@@ -216,7 +265,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   deleteUsers: (ids) => {
     const target = new Set(ids)
-    set((state) => ({ users: state.users.filter((user) => !target.has(user.id)) }))
+    set((state) => ({
+      users: state.users.filter((user) => !target.has(user.id)),
+      orders: state.orders.filter((order) => !target.has(order.userId)),
+      tickets: state.tickets.filter((ticket) => !target.has(ticket.userId)),
+      certificates: state.certificates.filter((certificate) => !target.has(certificate.userId)),
+    }))
   },
 
   upsertSubject: (subject) =>
@@ -229,11 +283,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deleteSubject: (id) =>
     set((state) => {
       const topicIds = new Set(state.topics.filter((topic) => topic.subjectId === id).map((topic) => topic.id))
+      const removedTests = new Set(
+        state.tests.filter((test) => topicIds.has(test.topicId)).map((test) => test.id),
+      )
       return {
         subjects: state.subjects.filter((subject) => subject.id !== id),
         topics: state.topics.filter((topic) => topic.subjectId !== id),
         videos: state.videos.filter((video) => !topicIds.has(video.topicId)),
         tests: state.tests.filter((test) => !topicIds.has(test.topicId)),
+        olympiads: withoutTestIds(state.olympiads, removedTests),
       }
     }),
 
@@ -245,11 +303,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
 
   deleteTopic: (id) =>
-    set((state) => ({
-      topics: state.topics.filter((topic) => topic.id !== id),
-      videos: state.videos.filter((video) => video.topicId !== id),
-      tests: state.tests.filter((test) => test.topicId !== id),
-    })),
+    set((state) => {
+      const removedTests = new Set(
+        state.tests.filter((test) => test.topicId === id).map((test) => test.id),
+      )
+      return {
+        topics: state.topics.filter((topic) => topic.id !== id),
+        videos: state.videos.filter((video) => video.topicId !== id),
+        tests: state.tests.filter((test) => test.topicId !== id),
+        olympiads: withoutTestIds(state.olympiads, removedTests),
+      }
+    }),
 
   reorderTopics: (ids) =>
     set((state) => {
@@ -287,7 +351,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         : [test, ...state.tests],
     })),
 
-  deleteTest: (id) => set((state) => ({ tests: state.tests.filter((test) => test.id !== id) })),
+  deleteTest: (id) =>
+    set((state) => ({
+      tests: state.tests.filter((test) => test.id !== id),
+      olympiads: withoutTestIds(state.olympiads, new Set([id])),
+    })),
 
   importTests: (topicId, incoming) =>
     set((state) => ({
@@ -376,7 +444,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })),
 
   setOrderStatus: (id, status) =>
-    set((state) => ({ orders: state.orders.map((order) => (order.id === id ? { ...order, status } : order)) })),
+    set((state) => {
+      const order = state.orders.find((item) => item.id === id)
+      if (!order) return {}
+      const orders = state.orders.map((item) => (item.id === id ? { ...item, status } : item))
+      if (order.status !== 'pending' || status === 'pending') return { orders }
+      if (status === 'done') {
+        return {
+          orders,
+          products: state.products.map((product) => {
+            if (product.id !== order.productId) return product
+            const stock = Math.max(0, product.stock - 1)
+            return {
+              ...product,
+              stock,
+              sold: product.sold + 1,
+              status: stock === 0 && product.status === 'active' ? ('out' as const) : product.status,
+            }
+          }),
+        }
+      }
+      return {
+        orders,
+        users: state.users.map((user) =>
+          user.id === order.userId ? { ...user, coins: user.coins + order.coins } : user,
+        ),
+      }
+    }),
 
   upsertPromo: (promo) =>
     set((state) => ({
@@ -429,7 +523,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       userId,
       userName: user.name,
       type,
-      issuedAt: nowIso(),
+      issuedAt: MOCK_NOW.toISOString(),
       status: 'issued',
     }
     set((state) => ({ certificates: [certificate, ...state.certificates] }))
@@ -463,26 +557,154 @@ export const useAppStore = create<AppStore>((set, get) => ({
       read: 0,
       clicked: 0,
       scheduled: payload.scheduled,
+      scheduledAt: payload.scheduled ? payload.scheduledAt : undefined,
     }
     set((state) => ({ notifications: [record, ...state.notifications] }))
   },
 
+  updateNotification: (id, patch) =>
+    set((state) => ({
+      notifications: state.notifications.map((notification) =>
+        notification.id === id ? { ...notification, ...patch } : notification,
+      ),
+    })),
+
   deleteNotification: (id) =>
     set((state) => ({ notifications: state.notifications.filter((notification) => notification.id !== id) })),
+
+  upsertAutomation: (automation) =>
+    set((state) => ({
+      automations: state.automations.some((item) => item.id === automation.id)
+        ? state.automations.map((item) => (item.id === automation.id ? automation : item))
+        : [...state.automations, automation],
+    })),
+
+  deleteAutomation: (id) =>
+    set((state) => ({ automations: state.automations.filter((item) => item.id !== id) })),
+
+  toggleAutomation: (id) =>
+    set((state) => ({
+      automations: state.automations.map((item) =>
+        item.id === id ? { ...item, enabled: !item.enabled } : item,
+      ),
+    })),
+
+  runAutomation: (id) => {
+    const state = get()
+    const rule = state.automations.find((item) => item.id === id)
+    if (!rule || !rule.enabled) return 0
+    const now = Date.now()
+    const HOUR = 3_600_000
+    const inAudience = state.users.filter((user) => {
+      if (rule.audience === 'pro') return user.plan === 'pro'
+      if (rule.audience === 'free') return user.plan === 'free'
+      return true
+    })
+    const recipients = inAudience.filter((user) => {
+      switch (rule.trigger) {
+        case 'signup':
+          return now - new Date(user.createdAt).getTime() <= Math.max(rule.delayHours, 24) * HOUR
+        case 'plan_expiring': {
+          if (!user.planEndsAt) return false
+          const left = new Date(user.planEndsAt).getTime() - now
+          return left > 0 && left <= Math.max(rule.delayHours, 1) * HOUR
+        }
+        case 'inactive':
+          return now - new Date(user.lastSeenAt).getTime() >= rule.delayHours * HOUR
+        case 'streak':
+          return user.streak > 0
+        case 'payment_failed':
+          return state.transactions.some((txn) => txn.userId === user.id && txn.status === 'cancelled')
+      }
+    }).length
+    const sentAt = nowIso()
+    const record: NotificationRecord = {
+      id: uid('notif'),
+      title: rule.title,
+      body: rule.body,
+      link: rule.link,
+      audience: rule.audience,
+      type: rule.type,
+      sentAt,
+      recipients,
+      read: 0,
+      clicked: 0,
+      scheduled: false,
+    }
+    set((current) => ({
+      notifications: [record, ...current.notifications],
+      automations: current.automations.map((item) =>
+        item.id === id ? { ...item, lastRunAt: sentAt, sent: item.sent + recipients } : item,
+      ),
+      logs: [
+        {
+          id: uid('log'),
+          at: sentAt,
+          level: 'info' as const,
+          message: `Avtomatik xabar yuborildi: ${rule.name} · ${recipients} qabul qiluvchi`,
+          user: 'system',
+          ip: 'local',
+        },
+        ...current.logs,
+      ].slice(0, 120),
+    }))
+    return recipients
+  },
 
   addLog: (entry) =>
     set((state) => ({
       logs: [{ ...entry, id: uid('log') }, ...state.logs].slice(0, 120),
     })),
 
+  clearLogs: () => set({ logs: [] }),
+
   createBackup: () => {
+    const state = get()
+    const snapshot: Snapshot = {
+      users: state.users,
+      subjects: state.subjects,
+      topics: state.topics,
+      videos: state.videos,
+      tests: state.tests,
+      olympiads: state.olympiads,
+      transactions: state.transactions,
+      products: state.products,
+      orders: state.orders,
+      promos: state.promos,
+      campaigns: state.campaigns,
+      tickets: state.tickets,
+      certificates: state.certificates,
+      certTemplates: state.certTemplates,
+      notifications: state.notifications,
+      automations: state.automations,
+      logs: state.logs,
+      admins: state.admins,
+      roles: state.roles,
+      settings: state.settings,
+      profile: state.profile,
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(snapshot)).length
+    const id = uid('backup')
+    backupSnapshots.set(id, snapshot)
     const backup: Backup = {
-      id: uid('backup'),
+      id,
       at: nowIso(),
-      size: `${Math.floor(130 + Math.random() * 60)} MB`,
+      size: bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`,
       status: 'success',
     }
-    set((state) => ({ backups: [backup, ...state.backups] }))
+    set((current) => ({ backups: [backup, ...current.backups] }))
+  },
+
+  restoreBackup: (id) => {
+    const snapshot = backupSnapshots.get(id)
+    if (!snapshot) return false
+    set(snapshot)
+    return true
+  },
+
+  deleteBackup: (id) => {
+    backupSnapshots.delete(id)
+    set((state) => ({ backups: state.backups.filter((backup) => backup.id !== id) }))
   },
 
   upsertAdmin: (admin) =>
@@ -491,6 +713,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ? state.admins.map((item) => (item.id === admin.id ? admin : item))
         : [...state.admins, admin],
     })),
+
+  deleteAdmin: (id) => set((state) => ({ admins: state.admins.filter((admin) => admin.id !== id) })),
 
   updateAdminStatus: (id, status) =>
     set((state) => ({
@@ -505,6 +729,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
           : role,
       ),
     })),
+
+  upsertRole: (role) =>
+    set((state) => ({
+      roles: state.roles.some((item) => item.id === role.id)
+        ? state.roles.map((item) => (item.id === role.id ? role : item))
+        : [...state.roles, role],
+    })),
+
+  deleteRole: (id) => {
+    const state = get()
+    if (state.admins.some((admin) => admin.roleId === id)) return false
+    set({ roles: state.roles.filter((role) => role.id !== id) })
+    return true
+  },
 
   updateSettings: (patch) => set((state) => ({ settings: { ...state.settings, ...patch } })),
   updateProfile: (patch) => set((state) => ({ profile: { ...state.profile, ...patch } })),

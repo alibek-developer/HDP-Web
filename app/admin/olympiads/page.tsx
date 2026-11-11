@@ -418,28 +418,17 @@ export default function OlympiadsPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-3 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
-        <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <span className="inline-flex items-center gap-2 font-geist text-[10.5px] font-bold uppercase tracking-[0.16em] text-ink-3 [@media(max-height:720px)]:hidden">
-              <span className="h-px w-6 bg-brand" />
-              HDP Academy · Musobaqalar
+      <div className="flex admin-workspace flex-col gap-3 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="h2 truncate text-ink">Olimpiadalar</h1>
+            <span className="rounded-full bg-muted px-2 py-0.5 font-geist text-[11px] font-bold tabular text-ink-2">
+              {number(olympiads.length)}
             </span>
-            <div className="mt-1.5 flex items-center gap-2.5">
-              <h1 className="font-geist text-[29px] font-extrabold leading-none tracking-[-0.035em] text-ink sm:text-[36px]">
-                Olimpiadalar
-              </h1>
-              <span className="rounded-full bg-muted px-2.5 py-1 font-geist text-[11px] font-bold tabular text-ink-2">
-                {number(olympiads.length)}
-              </span>
-            </div>
-            <p className="mt-1.5 hidden font-geist text-[13px] text-ink-3 sm:block">
-              Musobaqalarni rejalashtiring, jonli kuzatib boring va natijalarni e'lon qiling.
-            </p>
           </div>
           <Link
             href="/admin/olympiads/new"
-            className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-ink px-3.5 font-geist text-[13px] font-bold text-white transition hover:bg-brand sm:px-4"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-ink px-2.5 font-geist text-[12.5px] font-bold text-white transition hover:bg-brand sm:px-3"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Yangi olimpiada</span>

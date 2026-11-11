@@ -19,7 +19,7 @@ import {
 import { PageTransition } from '@/components/layout/Page'
 import { cn, useToast } from '@/components/ui'
 import { useAppStore } from '@/lib/store'
-import { metrics, packageDistribution, systemStatus } from '@/lib/mock'
+import { systemStatus } from '@/lib/mock'
 import {
   MOCK_NOW,
   dateLong,
@@ -223,11 +223,40 @@ export default function DashboardPage() {
     const top = sorted.slice(0, 5)
     const rest = sorted.slice(5).reduce((sum, [, count]) => sum + count, 0) + catchAll
     const rows = top.map(([name, count]) => ({ name, count }))
-    if (rest > 0) rows.push({ name: 'Boshqa', count: rest })
+    if (rest > 0) rows.push({ name: 'Boshqa tumanlar', count: rest })
     return rows
   }, [users])
 
   const liveOlympiad = useMemo(() => olympiads.find((olympiad) => olympiad.status === 'live'), [olympiads])
+
+  const liveMetrics = useMemo(() => {
+    const now = MOCK_NOW.getTime()
+    const day = 86_400_000
+    const daysSince = (iso: string) => now - new Date(iso).getTime()
+    const proUsers = users.filter((user) => user.plan === 'pro')
+    return {
+      proUsers: proUsers.length,
+      todayActive: users.filter((user) => daysSince(user.lastSeenAt) < day).length,
+      yesterdayActive: users.filter((user) => {
+        const diff = daysSince(user.lastSeenAt)
+        return diff >= day && diff < 2 * day
+      }).length,
+      weeklyNew: users.filter((user) => daysSince(user.createdAt) < 7 * day).length,
+      monthlyNewPro: proUsers.filter((user) => daysSince(user.createdAt) < 30 * day).length,
+    }
+  }, [users])
+
+  const packageDistribution = useMemo(() => {
+    const counts: Record<PackageId, number> = { '1m': 0, '3m': 0, '1y': 0 }
+    for (const user of users) {
+      if (user.plan === 'pro' && user.planPackage) counts[user.planPackage] += 1
+    }
+    return [
+      { key: '1m' as PackageId, label: '1 oylik', value: counts['1m'] },
+      { key: '3m' as PackageId, label: '3 oylik', value: counts['3m'] },
+      { key: '1y' as PackageId, label: '1 yillik', value: counts['1y'] },
+    ]
+  }, [users])
 
   const totalUsers = users.length
   const regionCount = useMemo(() => new Set(users.map((user) => user.region)).size, [users])
@@ -238,10 +267,10 @@ export default function DashboardPage() {
     downloadCsv(`hdp-hisobot-${MOCK_NOW.toISOString().slice(0, 10)}.csv`, [
       ["Ko'rsatkich", 'Qiymat'],
       ['Jami foydalanuvchilar', totalUsers],
-      ['Pro obunalar', metrics.proUsers],
+      ['Pro obunalar', liveMetrics.proUsers],
       ['Bu oy daromad', monthRevenue],
-      ['Bugun faol', metrics.todayActive],
-      ['Bu hafta yangi', metrics.weeklyNew],
+      ['Bugun faol', liveMetrics.todayActive],
+      ['Bu hafta yangi', liveMetrics.weeklyNew],
       ['Hisobot sanasi', dateLong(MOCK_NOW)],
     ])
     toast({ title: 'Hisobot yuklandi', description: 'CSV fayl kompyuteringizga saqlandi.', tone: 'success' })
@@ -251,34 +280,30 @@ export default function DashboardPage() {
 
   return (
     <PageTransition>
-      <div className="pb-1">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
-            <Eyebrow className="text-ink-3">HDP Academy · Boshqaruv paneli</Eyebrow>
-            <h1 className="mt-2 font-geist text-[34px] font-extrabold leading-[1.02] tracking-[-0.035em] text-ink sm:text-[44px]">
-              Bugungi holat
-            </h1>
-            <p className="mt-2 text-[13px] font-medium text-ink-3">
-              <span className="capitalize">{weekday(MOCK_NOW)}</span>, {dateLong(MOCK_NOW)} — platforma bir
-              qarashda
-            </p>
+      <div className="flex admin-workspace flex-col overflow-hidden  ">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="h2 truncate text-ink">Bugungi holat</h1>
+            <span className="hidden truncate text-[12px] text-ink-3 sm:inline">
+              <span className="capitalize">{weekday(MOCK_NOW)}</span>, {dateLong(MOCK_NOW)} — platforma bir qarashda
+            </span>
           </div>
           <button
             type="button"
             onClick={exportReport}
-            className="inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-[12px] bg-ink px-5 font-geist text-[14px] font-bold text-white transition-colors hover:bg-brand active:translate-y-px sm:w-auto"
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-ink px-3 font-geist text-[12.5px] font-bold text-white transition-colors hover:bg-brand active:translate-y-px sm:w-auto"
           >
-            <Download className="h-[18px] w-[18px]" strokeWidth={2.4} />
+            <Download className="h-4 w-4" strokeWidth={2.4} />
             Hisobot yuklab olish
           </button>
         </header>
 
-        <div className="mt-5 grid grid-cols-12 gap-3 sm:gap-4">
+        <div className="mt-3 grid min-h-0 flex-1 grid-cols-12 gap-3 overflow-y-auto overscroll-contain pb-1 pr-1 sm:gap-4">
           <Reveal className="relative col-span-12 overflow-hidden rounded-[22px] bg-ink p-5 text-white sm:p-6 lg:col-span-5">
             <div className="flex items-start justify-between gap-3">
               <Eyebrow className="text-white/45">Jami o'quvchilar</Eyebrow>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 font-geist text-[11px] font-bold tabular text-white/85 ring-1 ring-white/10">
-                <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.6} />+{number(metrics.weeklyNew)} bu hafta
+                <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.6} />+{number(liveMetrics.weeklyNew)} bu hafta
               </span>
             </div>
             <p className="mt-3 font-geist text-[52px] font-extrabold leading-none tracking-[-0.045em] tabular sm:text-[62px]">
@@ -374,18 +399,20 @@ export default function DashboardPage() {
           <Reveal delay={0.1} className="col-span-12 grid grid-cols-3 gap-3 sm:col-span-6 lg:col-span-4 lg:grid-cols-1">
             <Tile
               label="Faol Pro obunalar"
-              value={number(metrics.proUsers)}
-              caption={`+${number(metrics.monthlyNewPro)} bu oy`}
+              value={number(liveMetrics.proUsers)}
+              caption={`+${number(liveMetrics.monthlyNewPro)} bu oy`}
             />
             <Tile
               label="Bugun faol"
-              value={number(metrics.todayActive)}
-              caption={`−${number(metrics.yesterdayActive - metrics.todayActive)} kechaga`}
-              tone="down"
+              value={number(liveMetrics.todayActive)}
+              caption={`${liveMetrics.todayActive >= liveMetrics.yesterdayActive ? '+' : '−'}${number(
+                Math.abs(liveMetrics.todayActive - liveMetrics.yesterdayActive),
+              )} kechaga`}
+              tone={liveMetrics.todayActive >= liveMetrics.yesterdayActive ? 'up' : 'down'}
             />
             <Tile
               label="Bu hafta yangi"
-              value={`+${number(metrics.weeklyNew)}`}
+              value={`+${number(liveMetrics.weeklyNew)}`}
               caption="o'quvchi qo'shildi"
             />
           </Reveal>
@@ -524,12 +551,12 @@ export default function DashboardPage() {
               </div>
             </div>
             <p className="mt-4 font-geist text-[34px] font-extrabold leading-none tracking-[-0.04em] tabular text-ink">
-              {number(metrics.proUsers)}
+              {number(liveMetrics.proUsers)}
               <span className="ml-1.5 text-[11.5px] font-bold tracking-normal text-ink-3">faol Pro</span>
             </p>
             <div className="mt-4 flex h-9 gap-1">
               {packageDistribution.map((item, index) => {
-                const share = (item.value / Math.max(1, metrics.proUsers)) * 100
+                const share = (item.value / Math.max(1, liveMetrics.proUsers)) * 100
                 return (
                   <div
                     key={item.key}
@@ -552,7 +579,7 @@ export default function DashboardPage() {
                   <span className="flex-1 font-semibold text-ink-2">{item.label}</span>
                   <span className="font-geist font-bold tabular text-ink">{number(item.value)}</span>
                   <span className="w-9 text-right tabular text-ink-3">
-                    {percent((item.value / Math.max(1, metrics.proUsers)) * 100)}
+                    {percent((item.value / Math.max(1, liveMetrics.proUsers)) * 100)}
                   </span>
                 </li>
               ))}
@@ -603,7 +630,7 @@ export default function DashboardPage() {
               <div>
                 <Eyebrow className="text-ink-3">Hududlar</Eyebrow>
                 <h2 className="mt-1.5 font-geist text-[18px] font-bold tracking-[-0.015em] text-ink">
-                  Viloyatlar kesimi
+                  Tumanlar kesimi
                 </h2>
               </div>
               <Link

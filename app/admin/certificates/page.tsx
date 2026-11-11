@@ -15,6 +15,7 @@ import {
   List,
   Move,
   Pencil,
+  Plus,
   RefreshCw,
   Send,
   SlidersHorizontal,
@@ -307,6 +308,8 @@ function downloadCertificatePng(certificate: Certificate, template: CertTemplate
 export default function CertificatesPage() {
   const certificates = useAppStore((state) => state.certificates)
   const certTemplates = useAppStore((state) => state.certTemplates)
+  const users = useAppStore((state) => state.users)
+  const addCertificate = useAppStore((state) => state.addCertificate)
   const resendCertificate = useAppStore((state) => state.resendCertificate)
   const deleteCertificate = useAppStore((state) => state.deleteCertificate)
   const updateTemplate = useAppStore((state) => state.updateTemplate)
@@ -324,6 +327,41 @@ export default function CertificatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Certificate | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<CertTemplate | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [issueOpen, setIssueOpen] = useState(false)
+  const [issueQuery, setIssueQuery] = useState('')
+  const [issueUserId, setIssueUserId] = useState('')
+  const [issueType, setIssueType] = useState<CertType>('course')
+
+  const issueMatches = useMemo(() => {
+    const term = issueQuery.trim().toLowerCase()
+    if (!term) return []
+    return users
+      .filter((user) => user.name.toLowerCase().includes(term) || user.id.toLowerCase().includes(term))
+      .slice(0, 6)
+  }, [users, issueQuery])
+
+  const issueUser = users.find((user) => user.id === issueUserId) ?? null
+
+  const resetIssue = () => {
+    setIssueOpen(false)
+    setIssueQuery('')
+    setIssueUserId('')
+    setIssueType('course')
+  }
+
+  const issueCertificate = () => {
+    if (!issueUser) {
+      toast({ title: 'Foydalanuvchini tanlang', tone: 'warning' })
+      return
+    }
+    addCertificate(issueUser.id, issueType)
+    toast({
+      title: 'Sertifikat berildi',
+      description: `${issueUser.name} · ${TYPE_LABEL[issueType]}`,
+      tone: 'success',
+    })
+    resetIssue()
+  }
 
   const viewing = certificates.find((certificate) => certificate.id === viewingId) ?? null
   const templateFor = (certType: CertType) => certTemplates.find((template) => template.type === certType) ?? certTemplates[0]
@@ -399,18 +437,14 @@ export default function CertificatesPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-brand">
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <nav className="flex items-center gap-1.5 text-[12px] text-ink-3" aria-label="Breadcrumb">
-              <Link href="/admin" className="transition hover:text-brand">Dashboard</Link>
-              <span aria-hidden="true">/</span>
-              <span className="font-medium text-ink-2">Sertifikatlar</span>
-            </nav>
-            <div className="mt-1 flex flex-wrap items-center gap-2.5">
-              <h1 className="h2 text-ink">Sertifikatlar</h1>
-              <Badge tone="brand">{number(certificates.length)} ta</Badge>
-            </div>
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3  [@media(max-height:720px)]:gap-2 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-brand">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="h2 truncate text-ink">Sertifikatlar</h1>
+            <Badge tone="brand">{number(certificates.length)} ta</Badge>
+            <Button size="sm" onClick={() => setIssueOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> Sertifikat berish
+            </Button>
           </div>
           <div role="group" aria-label="Sertifikatlar bo‘limi" className="grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:inline-flex">
             <button
@@ -701,6 +735,75 @@ export default function CertificatesPage() {
       </Modal>
 
       <TemplateEditor template={editingTemplate} onClose={() => setEditingTemplate(null)} onSave={saveTemplate} />
+
+      <Modal
+        open={issueOpen}
+        onClose={resetIssue}
+        title="Sertifikat berish"
+        description="O'quvchini tanlang va sertifikat turini belgilang"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={resetIssue}>Bekor qilish</Button>
+            <Button onClick={issueCertificate} disabled={!issueUser}>
+              <BadgeCheck className="h-4 w-4" /> Berish
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="O'quvchi" required hint="Ism yoki ID bo'yicha qidiring">
+            <Input
+              aria-label="O'quvchini qidirish"
+              placeholder="Masalan: Aziza yoki HDP-84219"
+              value={issueQuery}
+              onChange={(event) => {
+                setIssueQuery(event.target.value)
+                setIssueUserId('')
+              }}
+              autoComplete="off"
+            />
+          </Field>
+          {issueUser ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-line-brand bg-brand-soft px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold text-ink">{issueUser.name}</p>
+                <p className="font-mono text-[11px] text-ink-3">{issueUser.id}</p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => { setIssueUserId(''); setIssueQuery('') }}>
+                O'zgartirish
+              </Button>
+            </div>
+          ) : issueMatches.length ? (
+            <ul className="divide-y divide-line-2 overflow-hidden rounded-lg border border-line-2">
+              {issueMatches.map((user) => (
+                <li key={user.id}>
+                  <button
+                    type="button"
+                    onClick={() => { setIssueUserId(user.id); setIssueQuery(user.name) }}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-canvas"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-medium text-ink">{user.name}</span>
+                      <span className="block font-mono text-[11px] text-ink-3">{user.id}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] text-ink-3">{user.region}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : issueQuery.trim() ? (
+            <p className="text-[12px] text-ink-3">O'quvchi topilmadi.</p>
+          ) : null}
+          <Field label="Sertifikat turi" required>
+            <Select aria-label="Sertifikat turi" value={issueType} onChange={(event) => setIssueType(event.target.value as CertType)}>
+              {(Object.keys(TYPE_LABEL) as CertType[]).map((value) => (
+                <option key={value} value={value}>{TYPE_LABEL[value]}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </Modal>
 
       <Modal
         open={deleteTarget !== null}

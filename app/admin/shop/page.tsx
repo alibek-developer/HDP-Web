@@ -172,24 +172,17 @@ export default function ShopPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
-              <span className="text-ink-3">Dashboard</span>
-              <span className="text-placeholder">/</span>
-              <span className="text-ink">Do'kon</span>
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-2">
-              <h1 className="h2 truncate text-ink">Do'kon</h1>
-              <Badge tone="brand">{number(products.length)} mahsulot</Badge>
-            </div>
-            <p className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="h2 truncate text-ink">Do'kon</h1>
+            <Badge tone="brand">{number(products.length)} mahsulot</Badge>
+            <span className="hidden truncate text-[12px] text-ink-3 lg:inline">
               Coin do'koni mahsulotlari, buyurtmalar va sovg'alar
-            </p>
+            </span>
           </div>
           {tab === 'products' ? (
-            <Button onClick={() => setEditing({ ...EMPTY_PRODUCT })} className="h-10 sm:h-11">
+            <Button onClick={() => setEditing({ ...EMPTY_PRODUCT })} className="h-9">
               <Plus className="h-4 w-4" />
               <span className="max-[360px]:hidden">Yangi mahsulot</span>
             </Button>
@@ -644,6 +637,7 @@ function ProductDrawer({
   const [draft, setDraft] = useState<Product | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const { toast } = useToast()
   const categories = ['Texnika', 'Aksesuar', 'Kiyim', 'Aksiya']
 
   useEffect(() => {
@@ -654,7 +648,15 @@ function ProductDrawer({
   const update = (patch: Partial<Product>) => setDraft((value) => (value ? { ...value, ...patch } : value))
 
   const readFile = (file: File | null | undefined) => {
-    if (!file || !file.type.startsWith('image/')) return
+    if (!file) return
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      toast({ title: 'PNG, JPG yoki WebP tanlang', tone: 'warning' })
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'Rasm hajmi 2 MB dan oshmasligi kerak', tone: 'warning' })
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => update({ image: String(reader.result) })
     reader.readAsDataURL(file)
@@ -718,7 +720,7 @@ function ProductDrawer({
               <input
                 ref={inputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 className="hidden"
                 onChange={(event) => readFile(event.target.files?.[0])}
               />

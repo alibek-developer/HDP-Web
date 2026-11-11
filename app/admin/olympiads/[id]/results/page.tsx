@@ -61,7 +61,7 @@ export default function OlympiadResultsPage() {
   if (!olympiad || results.length === 0) {
     return (
       <PageTransition>
-        <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+        <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
           <div className="grid min-h-0 flex-1 place-items-center rounded-[18px] border border-dashed border-line bg-white">
             <EmptyState
               title={olympiad ? "Natijalar hali yo'q" : 'Olimpiada topilmadi'}
@@ -97,7 +97,7 @@ export default function OlympiadResultsPage() {
 
   const exportResults = () => {
     downloadCsv(`olimpiada-${olympiad.id}-natijalar.csv`, [
-      ["O'rin", 'Ism', 'Ball', 'Vaqt (sekund)', 'Viloyat', 'Sertifikat'],
+      ["O'rin", 'Ism', 'Ball', 'Vaqt (sekund)', 'Tuman', 'Sertifikat'],
       ...results.map((result, index) => [
         index + 1,
         result.name,
@@ -126,7 +126,7 @@ export default function OlympiadResultsPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
@@ -308,7 +308,7 @@ export default function OlympiadResultsPage() {
                   <th className="py-2 pr-3 font-semibold">Ishtirokchi</th>
                   <th className="py-2 pr-3 font-semibold">Ball</th>
                   <th className="py-2 pr-3 font-semibold">Vaqt</th>
-                  <th className="py-2 pr-3 font-semibold">Viloyat</th>
+                  <th className="py-2 pr-3 font-semibold">Tuman</th>
                   <th className="px-4 py-2 font-semibold">Sertifikat</th>
                 </tr>
               </thead>

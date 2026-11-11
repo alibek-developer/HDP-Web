@@ -7,6 +7,7 @@ import type {
   CertTemplate,
   Certificate,
   LogEntry,
+  NotificationAutomation,
   NotificationRecord,
   Olympiad,
   OlympiadResult,
@@ -73,12 +74,19 @@ const LAST_NAMES = [
 ]
 
 const REGIONS = [
-  { name: 'Toshkent', count: 3241, growth: 12.4 },
-  { name: 'Samarqand', count: 2180, growth: 9.8 },
-  { name: "Farg'ona", count: 1840, growth: 8.1 },
-  { name: 'Xorazm', count: 1520, growth: 6.7 },
-  { name: 'Qashqadaryo', count: 1210, growth: 5.2 },
-  { name: 'Boshqa', count: 2856, growth: 10.9 },
+  { name: 'Urganch shahri', count: 2580, growth: 12.4 },
+  { name: 'Xiva shahri', count: 1420, growth: 10.1 },
+  { name: 'Urganch tumani', count: 1260, growth: 8.9 },
+  { name: 'Xonqa', count: 1080, growth: 8.2 },
+  { name: 'Gurlan', count: 960, growth: 7.6 },
+  { name: 'Shovot', count: 900, growth: 7.2 },
+  { name: 'Hazorasp', count: 840, growth: 6.8 },
+  { name: "Bog'ot", count: 760, growth: 6.1 },
+  { name: 'Yangiariq', count: 700, growth: 5.8 },
+  { name: "Qo'shko'pir", count: 660, growth: 5.4 },
+  { name: 'Yangibozor', count: 540, growth: 4.9 },
+  { name: 'Xiva tumani', count: 460, growth: 4.4 },
+  { name: "Tuproqqal'a", count: 687, growth: 3.7 },
 ]
 
 export const REGION_NAMES = REGIONS.map((region) => region.name)
@@ -1008,7 +1016,66 @@ export const notifications: NotificationRecord[] = [
   },
 ]
 
-const LOG_MESSAGES: Array<[LogEntry['level'], string]> = [
+export const notificationAutomations: NotificationAutomation[] = [
+  {
+    id: 'auto-signup',
+    name: 'Xush kelibsiz xabari',
+    trigger: 'signup',
+    audience: 'all',
+    type: 'inapp',
+    delayHours: 0,
+    enabled: true,
+    title: 'HDP Academy ga xush kelibsiz!',
+    body: 'Birinchi darsni boshlang va kunlik streakni yoqib oling.',
+    link: 'https://hdp.uz/start',
+    lastRunAt: iso(NOW - 4 * HOUR),
+    sent: 184,
+  },
+  {
+    id: 'auto-expiring',
+    name: 'Obuna tugash eslatmasi',
+    trigger: 'plan_expiring',
+    audience: 'pro',
+    type: 'push',
+    delayHours: 72,
+    enabled: true,
+    title: 'Pro obunangiz tugamoqda',
+    body: 'Obunani yangilab, barcha darslar va testlardan foydalanishda davom eting.',
+    link: 'https://hdp.uz/subscription',
+    lastRunAt: iso(NOW - 1 * DAY),
+    sent: 96,
+  },
+  {
+    id: 'auto-inactive',
+    name: 'Qaytish taklifi',
+    trigger: 'inactive',
+    audience: 'all',
+    type: 'push',
+    delayHours: 168,
+    enabled: false,
+    title: 'Sizni sog‘indik!',
+    body: 'Yangi mavzular va mashqlar sizni kutmoqda. Bugun davom eting.',
+    link: '',
+    sent: 412,
+  },
+  {
+    id: 'auto-streak',
+    name: 'Streak eslatmasi',
+    trigger: 'streak',
+    audience: 'all',
+    type: 'inapp',
+    delayHours: 20,
+    enabled: true,
+    title: 'Streakni yo‘qotmang',
+    body: 'Bugun kamida bitta mashq yechib, seriyani davom ettiring.',
+    link: '',
+    lastRunAt: iso(NOW - 3 * HOUR),
+    sent: 1_284,
+  },
+]
+
+
+const LOG_MESSAGES: [LogEntry['level'], string][] = [
   ['info', 'User HDP-84102 completed lesson “Viyet teoremasi”'],
   ['info', 'Payment TXN-20261107-4821 confirmed via Payme'],
   ['warning', 'Video stream latency above threshold (1420ms)'],
@@ -1147,12 +1214,15 @@ export const settings: AppSettings = {
     secretKey: 'uzum_sk_2d8a4f6c0b9e1a7d',
   },
   prices: { '1m': 49_000, '3m': 129_000, '1y': 399_000, trialDays: 7 },
+  autoBackup: true,
+  backupIntervalHours: 24,
 }
 
 export const profile: Profile = {
   name: 'Administrator',
   email: 'admin@hdp.uz',
   avatar: null,
+  preferences: { emailReports: true, securityAlerts: true, weeklyDigest: false },
 }
 
 export const systemStatus = [
@@ -1236,22 +1306,6 @@ export const topTopicViews = [...topics]
   .filter((topic) => topic.status === 'active')
   .sort((left, right) => right.views - left.views)
   .slice(0, 10)
-
-export const metrics = {
-  totalUsers: USER_COUNT,
-  proUsers: PRO_COUNT,
-  todayActive: TODAY_ACTIVE,
-  yesterdayActive: YESTERDAY_ACTIVE,
-  weeklyNew: WEEKLY_NEW,
-  monthlyNewPro: 48,
-  stalePro: 12,
-}
-
-export const packageDistribution = [
-  { key: '1m' as PackageId, label: '1 oylik', value: planMap.size ? [...planMap.values()].filter((plan) => plan.packageId === '1m').length : 234, color: '#22C55E' },
-  { key: '3m' as PackageId, label: '3 oylik', value: [...planMap.values()].filter((plan) => plan.packageId === '3m').length, color: '#16A34A' },
-  { key: '1y' as PackageId, label: '1 yillik', value: [...planMap.values()].filter((plan) => plan.packageId === '1y').length, color: '#14532D' },
-]
 
 export const totalRevenue = transactions
   .filter((transaction) => transaction.status === 'success')

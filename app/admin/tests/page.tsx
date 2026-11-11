@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import {
   Check,
   ChevronDown,
+  Download,
   FileUp,
   PencilLine,
   Plus,
@@ -295,32 +296,71 @@ export default function TestsPage() {
     setSelected(new Set())
   }
 
+  const exportCsv = () => {
+    if (filtered.length === 0) {
+      toast({ title: "Eksport uchun savol yo'q", tone: 'warning' })
+      return
+    }
+    const cell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+    const header = ['ID', 'Savol', 'A', 'B', 'C', 'D', "To'g'ri javob", 'Mavzu', 'Fan', 'Daraja', 'Holat', 'Ishlatilgan', 'Xato %']
+    const lines = [header.map(cell).join(',')]
+    for (const test of filtered) {
+      const topic = topicById.get(test.topicId)
+      const subject = topic ? subjectById.get(topic.subjectId) : undefined
+      lines.push(
+        [
+          test.id,
+          test.question,
+          test.options.a,
+          test.options.b,
+          test.options.c,
+          test.options.d,
+          test.correct.toUpperCase(),
+          topic?.name ?? '',
+          subject?.nameUz ?? '',
+          difficultyOf(test.difficulty).label,
+          STATUS[test.status].label,
+          test.used,
+          Math.round(test.errorRate),
+        ]
+          .map(cell)
+          .join(','),
+      )
+    }
+    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `hdp-testlar-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    toast({ title: 'CSV eksport qilindi', description: `${number(filtered.length)} savol`, tone: 'success' })
+  }
+
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-3 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)]">
-        <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <span className="inline-flex items-center gap-2 font-geist text-[10.5px] font-bold uppercase tracking-[0.16em] text-ink-3">
-              <span className="h-px w-6 bg-brand" />
-              HDP Academy · Test banki
+      <div className="flex admin-workspace flex-col gap-3 overflow-hidden  sm:gap-3.5 ">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="h2 truncate text-ink">Testlar</h1>
+            <span className="rounded-full bg-muted px-2 py-0.5 font-geist text-[11px] font-bold tabular text-ink-2">
+              {number(tests.length)}
             </span>
-            <div className="mt-1.5 flex items-center gap-2.5">
-              <h1 className="font-geist text-[29px] font-extrabold leading-none tracking-[-0.035em] text-ink sm:text-[36px]">
-                Testlar
-              </h1>
-              <span className="rounded-full bg-muted px-2.5 py-1 font-geist text-[11px] font-bold tabular text-ink-2">
-                {number(tests.length)}
-              </span>
-            </div>
-            <p className="mt-1.5 hidden text-[13px] text-ink-3 sm:block">
-              Savollarni tekshiring, darajalang va sifat ko'rsatkichlarini kuzating.
-            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={exportCsv}
+              aria-label="CSV eksport"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-2.5 font-geist text-[12.5px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-3"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Eksport</span>
+            </button>
             <a
               href="/admin/content/import"
               aria-label="PDF import"
-              className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-line bg-white px-3.5 font-geist text-[13px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-4"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-2.5 font-geist text-[12.5px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-3"
             >
               <FileUp className="h-4 w-4" />
               <span className="hidden sm:inline">PDF import</span>

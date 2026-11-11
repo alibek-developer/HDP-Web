@@ -35,8 +35,8 @@ export function GrowthChart({ data }: { data: Array<{ label: string; total: numb
         <AreaChart data={data} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
           <defs>
             <linearGradient id="growth-total" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#16a34a" stopOpacity={0.22} />
-              <stop offset="100%" stopColor="#16a34a" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="#e8522a" stopOpacity={0.22} />
+              <stop offset="100%" stopColor="#e8522a" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="growth-pro" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.16} />
@@ -65,7 +65,7 @@ export function GrowthChart({ data }: { data: Array<{ label: string; total: numb
               )
             }}
           />
-          <Area type="monotone" dataKey="total" stroke="#16a34a" strokeWidth={2.2} fill="url(#growth-total)" dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }} />
+          <Area type="monotone" dataKey="total" stroke="#e8522a" strokeWidth={2.2} fill="url(#growth-total)" dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }} />
           <Area type="monotone" dataKey="pro" stroke="#f59e0b" strokeWidth={2} fill="url(#growth-pro)" dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }} />
         </AreaChart>
       </ResponsiveContainer>
@@ -88,7 +88,7 @@ export function RevenueChart({ data }: { data: Array<{ label: string; value: num
             width={58}
           />
           <Tooltip
-            cursor={{ fill: 'rgba(22,163,74,0.06)' }}
+            cursor={{ fill: 'rgba(232,82,42,0.06)' }}
             content={({ active, payload, label }: any) => {
               if (!active || !payload?.length) return null
               return (
@@ -106,7 +106,7 @@ export function RevenueChart({ data }: { data: Array<{ label: string; value: num
               )
             }}
           />
-          <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#16a34a" activeBar={{ fill: '#15803d' }} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#e8522a" activeBar={{ fill: '#c2410c' }} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -120,8 +120,8 @@ export function ActiveChart({ data }: { data: Array<{ label: string; value: numb
         <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
           <defs>
             <linearGradient id="active-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#16a34a" stopOpacity={0.25} />
-              <stop offset="100%" stopColor="#16a34a" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="#e8522a" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="#e8522a" stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="#f3f4f6" vertical={false} />
@@ -137,7 +137,7 @@ export function ActiveChart({ data }: { data: Array<{ label: string; value: numb
               ) : null
             }
           />
-          <Area type="monotone" dataKey="value" stroke="#16a34a" strokeWidth={2.2} fill="url(#active-fill)" dot={false} />
+          <Area type="monotone" dataKey="value" stroke="#e8522a" strokeWidth={2.2} fill="url(#active-fill)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -338,7 +338,7 @@ export function NewVsTotalChart({
             yAxisId="total"
             type="monotone"
             dataKey="total"
-            stroke="#16a34a"
+            stroke="#e8522a"
             strokeWidth={2.2}
             dot={false}
             activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }}
@@ -371,7 +371,7 @@ export function DistributionBarChart({
   valueFormatter?: (value: number) => string
   yFormatter?: (value: number) => string
 }) {
-  const shades = ['#14532d', '#15803d', '#16a34a', '#22c55e', '#4ade80', '#86efac']
+  const shades = ['#a83618', '#c2410c', '#e8522a', '#f4764f', '#f7b7a3', '#fbd5c6']
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -386,7 +386,7 @@ export function DistributionBarChart({
             width={46}
           />
           <Tooltip
-            cursor={{ fill: 'rgba(22,163,74,0.06)' }}
+            cursor={{ fill: 'rgba(232,82,42,0.06)' }}
             content={({ active, payload, label }: any) =>
               active && payload?.length ? (
                 <TooltipShell>
@@ -433,7 +433,7 @@ export function DailyRevenueChart({ data }: { data: Array<{ label: string; value
             width={54}
           />
           <Tooltip
-            cursor={{ fill: 'rgba(22,163,74,0.06)' }}
+            cursor={{ fill: 'rgba(232,82,42,0.06)' }}
             content={({ active, payload, label }: any) =>
               active && payload?.length ? (
                 <TooltipShell>
@@ -445,7 +445,7 @@ export function DailyRevenueChart({ data }: { data: Array<{ label: string; value
               ) : null
             }
           />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]} fill="#16a34a" activeBar={{ fill: '#14532d' }} />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]} fill="#e8522a" activeBar={{ fill: '#a83618' }} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -459,8 +459,8 @@ export function CumulativeChart({ data }: { data: Array<{ label: string; value: 
         <AreaChart data={data} margin={{ top: 8, right: 8, left: -6, bottom: 0 }}>
           <defs>
             <linearGradient id="cumulative-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#16a34a" stopOpacity={0.24} />
-              <stop offset="100%" stopColor="#16a34a" stopOpacity={0.01} />
+              <stop offset="0%" stopColor="#e8522a" stopOpacity={0.24} />
+              <stop offset="100%" stopColor="#e8522a" stopOpacity={0.01} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="#f3f4f6" vertical={false} />
@@ -495,7 +495,7 @@ export function CumulativeChart({ data }: { data: Array<{ label: string; value: 
           <Area
             type="monotone"
             dataKey="value"
-            stroke="#16a34a"
+            stroke="#e8522a"
             strokeWidth={2.2}
             fill="url(#cumulative-fill)"
             dot={false}
@@ -528,7 +528,7 @@ export function FunnelChart({ steps }: { steps: Array<{ label: string; value: nu
                 initial={{ width: 0 }}
                 animate={{ width: `${share}%` }}
                 transition={{ duration: 0.7, delay: index * 0.08, ease: 'easeOut' }}
-                className={cn('h-full rounded-md', index === 0 ? 'bg-[#14532d]' : index === 1 ? 'bg-[#15803d]' : index === 2 ? 'bg-[#16a34a]' : 'bg-[#22c55e]')}
+                className={cn('h-full rounded-md', index === 0 ? 'bg-[#a83618]' : index === 1 ? 'bg-[#c2410c]' : index === 2 ? 'bg-[#e8522a]' : 'bg-[#f4764f]')}
               />
             </div>
           </div>

@@ -46,9 +46,9 @@ import {
   RevenueChart,
   Sparkline,
 } from '@/components/charts'
-import { UzbekistanMap } from '@/components/analytics/UzbekistanMap'
+import { KhorezmDistricts } from '@/components/analytics/KhorezmDistricts'
 import { useAppStore } from '@/lib/store'
-import { cohortMatrix, metrics, sessionDistribution } from '@/lib/mock'
+import { cohortMatrix, sessionDistribution } from '@/lib/mock'
 import { methodDistribution, revenueSeries } from '@/lib/series'
 import { GEO_PRO_SHARE, GEO_REGIONS, GEO_TOTAL } from '@/lib/geo'
 import {
@@ -229,7 +229,7 @@ export default function AnalyticsPage() {
     { label: 'Kirdi', value: totalUsers },
     { label: "Dars ko'rdi", value: Math.round(totalUsers * 0.72) },
     { label: 'Test yechdi', value: Math.round(totalUsers * 0.499) },
-    { label: 'Pro oldi', value: proUsers || metrics.proUsers },
+    { label: 'Pro oldi', value: proUsers },
   ]
 
   const activeTopics = useMemo(() => topics.filter((topic) => topic.status === 'active'), [topics])
@@ -237,6 +237,39 @@ export default function AnalyticsPage() {
     () => tests.filter((test) => test.status !== 'hidden'),
     [tests],
   )
+
+  const engagement = useMemo(() => {
+    const now = MOCK_NOW.getTime()
+    const daysSince = (iso: string) => now - new Date(iso).getTime()
+    const oldUsers = users.filter((user) => daysSince(user.createdAt) >= 30 * DAY)
+    const churned = oldUsers.filter((user) => daysSince(user.lastSeenAt) >= 30 * DAY).length
+    const totalViews = activeTopics.reduce((sum, topic) => sum + topic.views, 0)
+    const weightedMinutes = activeTopics.reduce((sum, topic) => sum + topic.avgMinutes * topic.views, 0)
+    const cohortAvg = cohortMatrix.flat().reduce((sum, value) => sum + value, 0) / Math.max(1, cohortMatrix.flat().length)
+    return {
+      dau: users.filter((user) => daysSince(user.lastSeenAt) < DAY).length,
+      yesterday: users.filter((user) => {
+        const diff = daysSince(user.lastSeenAt)
+        return diff >= DAY && diff < 2 * DAY
+      }).length,
+      mau: users.filter((user) => daysSince(user.lastSeenAt) < 30 * DAY).length,
+      churn: oldUsers.length ? (churned / oldUsers.length) * 100 : 0,
+      avgSession: totalViews > 0 ? Math.round(weightedMinutes / totalViews) : 0,
+      retention: cohortAvg,
+    }
+  }, [users, activeTopics])
+
+  const lifetime = useMemo(() => {
+    const paid = transactions.filter((transaction) => transaction.status === 'success')
+    const total = paid.reduce((sum, transaction) => sum + transaction.amount, 0)
+    const payingUsers = new Set(paid.map((transaction) => transaction.userId)).size
+    return {
+      revenue: total,
+      payingUsers,
+      ltv: payingUsers > 0 ? total / payingUsers : 0,
+      payingShare: totalUsers > 0 ? (payingUsers / totalUsers) * 100 : 0,
+    }
+  }, [transactions, totalUsers])
 
   const topTopics = useMemo(
     () => [...activeTopics].sort((left, right) => right.views - left.views).slice(0, 10),
@@ -294,19 +327,19 @@ export default function AnalyticsPage() {
         key: '1m',
         label: '1 oylik',
         value: users.filter((user) => user.plan === 'pro' && user.planPackage === '1m').length,
-        color: '#22C55E',
+        color: '#f4764f',
       },
       {
         key: '3m',
         label: '3 oylik',
         value: users.filter((user) => user.plan === 'pro' && user.planPackage === '3m').length,
-        color: '#16A34A',
+        color: '#e8522a',
       },
       {
         key: '1y',
         label: '1 yillik',
         value: users.filter((user) => user.plan === 'pro' && user.planPackage === '1y').length,
-        color: '#14532D',
+        color: '#a83618',
       },
     ],
     [users],
@@ -331,11 +364,11 @@ export default function AnalyticsPage() {
       rows.push(
         ['Ko\'rsatkich', 'Qiymat'],
         ['Davr', period],
-        ['DAU', metrics.todayActive],
-        ['MAU', 24_180],
-        ['Retention (7 kun)', '68%'],
-        ["O'rtacha sessiya", '24 daq'],
-        ['Churn rate', '8.2%'],
+        ['DAU', engagement.dau],
+        ['MAU', engagement.mau],
+        ['Retention (7 kun)', `${engagement.retention.toFixed(1)}%`],
+        ["O'rtacha sessiya", `${engagement.avgSession} daq`],
+        ['Churn rate', `${engagement.churn.toFixed(1)}%`],
       )
       rows.push([], ['Sana', 'Yangi', 'Jami'])
       for (const point of activity) rows.push([point.label, point.newUsers, point.total])
@@ -354,8 +387,8 @@ export default function AnalyticsPage() {
         ['Bu oy daromad', finance.current],
         ["O'tgan oy daromad", finance.previous],
         ["O'sish (%)", finance.growth.toFixed(1)],
-        ['LTV', 184_000],
-        ['CAC', 12_000],
+        ['LTV', Math.round(lifetime.ltv)],
+        ["To'lovchilar", lifetime.payingUsers],
       )
       rows.push([], ['Paket', 'Soni', 'Ulush (%)'])
       for (const item of packages) {
@@ -364,7 +397,7 @@ export default function AnalyticsPage() {
       rows.push([], ['To\'lov usuli', 'Ulush (%)'])
       for (const method of methods) rows.push([method.label, method.value.toFixed(1)])
     } else {
-      rows.push(['Viloyat', 'Foydalanuvchilar', 'Pro (%)', "O'sish (%)"])
+      rows.push(['Tuman', 'Foydalanuvchilar', 'Pro (%)', "O'sish (%)"])
       for (const region of GEO_REGIONS) {
         rows.push([region.name, region.users, region.proPercent, region.growth])
       }
@@ -392,25 +425,18 @@ export default function AnalyticsPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
-              <span className="text-ink-3">Dashboard</span>
-              <span className="text-placeholder">/</span>
-              <span className="text-ink">Analitika</span>
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-2">
-              <h1 className="h2 truncate text-ink">Analitika</h1>
-              <Badge tone="brand" dot>
-                Live
-              </Badge>
-            </div>
-            <p className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="h2 truncate text-ink">Analitika</h1>
+            <Badge tone="brand" dot>
+              Live
+            </Badge>
+            <span className="hidden truncate text-[12px] text-ink-3 md:inline">
               {dateLong(MOCK_NOW)} · Platforma bo'yicha chuqur tahlil
-            </p>
+            </span>
           </div>
-          <Button variant="secondary" onClick={exportReport} className="h-10 sm:h-11">
+          <Button variant="secondary" onClick={exportReport} className="h-9">
             <Download className="h-4 w-4" />
             <span className="max-[360px]:hidden">Eksport CSV</span>
           </Button>
@@ -441,7 +467,7 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [contain:paint]">
-          <div className="space-y-2.5 sm:space-y-3.5">
+          <div className="h-full space-y-2.5 sm:space-y-3.5">
             {tab === 'users' ? (
               <>
                 <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-white px-3 py-2.5 shadow-card sm:flex-row sm:flex-wrap sm:items-center">
@@ -479,12 +505,13 @@ export default function AnalyticsPage() {
                     iconClass="bg-error-bg text-error"
                     label="DAU (kunlik faol)"
                     foot={
-                      <Delta tone="down">
-                        −{number(metrics.yesterdayActive - metrics.todayActive)} kechaga nisbatan
+                      <Delta tone={engagement.dau >= engagement.yesterday ? 'up' : 'down'}>
+                        {engagement.dau >= engagement.yesterday ? '+' : '−'}
+                        {number(Math.abs(engagement.dau - engagement.yesterday))} kechaga nisbatan
                       </Delta>
                     }
                   >
-                    <CountUp value={metrics.todayActive} format={number} />
+                    <CountUp value={engagement.dau} format={number} />
                   </KpiCard>
                   <KpiCard
                     icon={Users}
@@ -492,7 +519,7 @@ export default function AnalyticsPage() {
                     label="MAU (oylik faol)"
                     foot={<span className="text-[10.5px] font-semibold text-ink-3">Oxirgi 30 kunda kirganlar</span>}
                   >
-                    <CountUp value={24_180} format={number} />
+                    <CountUp value={engagement.mau} format={number} />
                   </KpiCard>
                   <KpiCard
                     icon={Target}
@@ -500,7 +527,7 @@ export default function AnalyticsPage() {
                     label="Retention (7 kun)"
                     foot={<span className="text-[10.5px] font-semibold text-ink-3">Kogorta bo'yicha qaytish</span>}
                   >
-                    <CountUp value={68} suffix="%" />
+                    <CountUp value={engagement.retention} suffix="%" />
                   </KpiCard>
                   <KpiCard
                     icon={Clock}
@@ -509,7 +536,7 @@ export default function AnalyticsPage() {
                     foot={<span className="text-[10.5px] font-semibold text-ink-3">Bir sessiyadagi o'rtacha vaqt</span>}
                   >
                     <span className="flex items-baseline gap-1">
-                      <CountUp value={24} />
+                      <CountUp value={engagement.avgSession} />
                       <span className="text-[13px] font-bold text-ink-3">daq</span>
                     </span>
                   </KpiCard>
@@ -518,12 +545,12 @@ export default function AnalyticsPage() {
                     iconClass="bg-warning-bg text-warning"
                     label="Churn rate"
                     foot={
-                      <Delta tone="flat">
-                        O'tgan oy 9.1%
-                      </Delta>
+                      <span className="text-[10.5px] font-semibold text-ink-3">
+                        30 kunda kirmaganlar ulushi
+                      </span>
                     }
                   >
-                    <CountUp value={8.2} format={(value) => percent(value, 1)} />
+                    <CountUp value={engagement.churn} format={(value) => percent(value, 1)} />
                   </KpiCard>
                 </div>
 
@@ -549,7 +576,7 @@ export default function AnalyticsPage() {
                     className="xl:col-span-3"
                     title="Retention cohort"
                     subtitle="Ro'yxatdan o'tgan hafta bo'yicha 7-kunlik qaytish (%)"
-                    action={<Badge tone="success" dot>68% o'rtacha</Badge>}
+                    action={<Badge tone="success" dot>{percent(engagement.retention, 0)} o'rtacha</Badge>}
                   >
                     <Heatmap matrix={cohortMatrix} rows={COHORT_ROWS} cols={COHORT_COLS} />
                   </SectionCard>
@@ -802,9 +829,9 @@ export default function AnalyticsPage() {
                   </SectionCard>
 
                   <SectionCard
-                    title="LTV va CAC"
-                    subtitle="Mijoz qiymati va jalb qilish narxi"
-                    action={<Badge tone="success" dot>15.3x</Badge>}
+                    title="Mijoz qiymati"
+                    subtitle="Muvaffaqiyatli to'lovlar asosida"
+                    action={<Badge tone="success" dot>{number(lifetime.payingUsers)} to'lovchi</Badge>}
                   >
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-[12px] bg-coin-bg/60 px-3 py-2.5">
@@ -812,24 +839,25 @@ export default function AnalyticsPage() {
                           LTV
                         </p>
                         <p className="mt-1 font-display text-[20px] font-extrabold tabular-nums text-ink">
-                          {money(184_000)}
+                          {money(Math.round(lifetime.ltv))}
                         </p>
-                        <p className="mt-0.5 text-[10.5px] text-ink-3">Umur bo'yi qiymat</p>
+                        <p className="mt-0.5 text-[10.5px] text-ink-3">Bir to'lovchiga o'rtacha</p>
                       </div>
                       <div className="rounded-[12px] bg-canvas px-3 py-2.5">
                         <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
-                          CAC
+                          To'lovchilar
                         </p>
                         <p className="mt-1 font-display text-[20px] font-extrabold tabular-nums text-ink">
-                          {money(12_000)}
+                          {percent(lifetime.payingShare, 1)}
                         </p>
-                        <p className="mt-0.5 text-[10.5px] text-ink-3">Jalb qilish narxi</p>
+                        <p className="mt-0.5 text-[10.5px] text-ink-3">Jami foydalanuvchidan</p>
                       </div>
                     </div>
                     <div className="mt-3 rounded-[10px] bg-canvas px-3 py-2 text-[11.5px] text-ink-3">
-                      Har <span className="font-semibold text-ink">1 so'm</span> marketingga{' '}
-                      <span className="font-semibold text-success">15.3 so'm</span> LTV keltiradi —
-                      nisbati sog'lom.
+                      <span className="font-semibold text-ink">{number(lifetime.payingUsers)}</span>{' '}
+                      foydalanuvchi to'lov qilgan, jami{' '}
+                      <span className="font-semibold text-success">{money(lifetime.revenue)}</span>{' '}
+                      tushum.
                     </div>
                   </SectionCard>
                 </div>
@@ -837,18 +865,20 @@ export default function AnalyticsPage() {
             ) : null}
 
             {tab === 'geo' ? (
-              <>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-                  <KpiCard icon={MapPin} iconClass="bg-brand-soft text-brand" label="Hududlar">
+              <div className="flex flex-col gap-2.5 sm:gap-3.5 xl:h-full xl:min-h-0">
+                <div className="grid shrink-0 grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+                  <KpiCard icon={MapPin} iconClass="bg-brand-soft text-brand" label="Tumanlar">
                     <CountUp value={GEO_REGIONS.length} />
                   </KpiCard>
                   <KpiCard icon={Users} iconClass="bg-info-bg text-info" label="Jami foydalanuvchi">
-                    <CountUp value={GEO_TOTAL} format={number} />
+                    <span data-geo-total>
+                      <CountUp value={GEO_TOTAL} format={number} />
+                    </span>
                   </KpiCard>
                   <KpiCard
                     icon={Flame}
                     iconClass="bg-error-bg text-error"
-                    label="Eng faol hudud"
+                    label="Eng faol tuman"
                   >
                     <span className="truncate text-[16px]">{GEO_REGIONS[0]?.name}</span>
                   </KpiCard>
@@ -857,25 +887,29 @@ export default function AnalyticsPage() {
                     iconClass="bg-coin-bg text-coin"
                     label="O'rtacha Pro ulushi"
                   >
-                    <CountUp value={GEO_PRO_SHARE} format={(value) => percent(value, 1)} />
+                    <span data-geo-pro>
+                      <CountUp value={GEO_PRO_SHARE} format={(value) => percent(value, 1)} />
+                    </span>
                   </KpiCard>
                 </div>
 
-                <div className="grid gap-2.5 sm:gap-3.5 xl:grid-cols-[1.35fr_1fr]">
+                <div className="grid gap-2.5 sm:gap-3.5 xl:min-h-0 xl:flex-1 xl:grid-cols-[1.35fr_1fr] xl:grid-rows-[minmax(0,1fr)]">
                   <SectionCard
-                    title="O'zbekiston xaritasi"
-                    subtitle="Viloyatlar bo'yicha foydalanuvchilar zichligi — kursorni ustiga olib boring"
-                    action={<Badge tone="brand" dot>Interaktiv</Badge>}
+                    title="Xorazm xaritasi"
+                    subtitle="Tumanlar bo'yicha foydalanuvchilar zichligi — hududni tanlang"
+                    action={<Badge tone="brand" dot className="max-sm:hidden">Xorazm viloyati</Badge>}
+                    className="xl:flex xl:min-h-0 xl:flex-col"
+                    bodyClassName="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col"
                   >
-                    <div className="mx-auto max-w-2xl">
-                      <UzbekistanMap />
-                    </div>
+                    <KhorezmDistricts />
                   </SectionCard>
 
                   <SectionCard
-                    title="Viloyatlar reytingi"
+                    title="Tumanlar reytingi"
                     subtitle="Foydalanuvchilar, Pro ulushi va o'sish"
-                    action={<Badge tone="gray">{GEO_REGIONS.length} hudud</Badge>}
+                    action={<Badge tone="gray">{GEO_REGIONS.length} tuman</Badge>}
+                    className="xl:flex xl:min-h-0 xl:flex-col"
+                    bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto"
                   >
                     <ol className="divide-y divide-line-2">
                       {GEO_REGIONS.map((region, index) => (
@@ -912,7 +946,7 @@ export default function AnalyticsPage() {
                     </ol>
                   </SectionCard>
                 </div>
-              </>
+              </div>
             ) : null}
           </div>
         </div>

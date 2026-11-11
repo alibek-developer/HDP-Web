@@ -169,6 +169,7 @@ export default function UsersPage() {
   const [coinsOpen, setCoinsOpen] = useState(false)
   const [coinsTargets, setCoinsTargets] = useState<User[] | null>(null)
   const [deleteIds, setDeleteIds] = useState<string[]>([])
+  const [blockTargets, setBlockTargets] = useState<User[] | null>(null)
 
   const totals = useMemo(() => {
     const active = users.filter((user) => user.status === 'active').length
@@ -266,7 +267,7 @@ export default function UsersPage() {
 
   const exportRows = (source: User[], suffix = 'foydalanuvchilar') => {
     downloadCsv(`hdp-${suffix}-${dateInput(new Date())}.csv`, [
-      ['ID', 'Ism', 'Username', 'Email', 'Telegram', 'Obuna', 'XP', 'Daraja', 'Coin', 'Streak', 'Viloyat', "Ro'yxat sanasi", 'Holat'],
+      ['ID', 'Ism', 'Username', 'Email', 'Telegram', 'Obuna', 'XP', 'Daraja', 'Coin', 'Streak', 'Tuman', "Ro'yxat sanasi", 'Holat'],
       ...source.map((user) => [
         user.id,
         user.name,
@@ -301,8 +302,15 @@ export default function UsersPage() {
   }
 
   const bulkBlock = () => {
-    setUserStatus(selectedUsers.map((user) => user.id), 'blocked')
-    toast({ title: `${selectedUsers.length} ta foydalanuvchi bloklandi`, tone: 'warning' })
+    if (selectedUsers.length === 0) return
+    setBlockTargets(selectedUsers)
+  }
+
+  const confirmBulkBlock = () => {
+    if (!blockTargets) return
+    setUserStatus(blockTargets.map((user) => user.id), 'blocked')
+    toast({ title: `${blockTargets.length} ta foydalanuvchi bloklandi`, tone: 'warning' })
+    setBlockTargets(null)
     setSelected(new Set())
   }
 
@@ -360,32 +368,21 @@ export default function UsersPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-3 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)]">
-        <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <span className="inline-flex items-center gap-2 font-geist text-[10.5px] font-bold uppercase tracking-[0.16em] text-ink-3">
-              <span className="h-px w-6 bg-brand" />
-              HDP Academy · Foydalanuvchilar
+      <div className="flex admin-workspace flex-col gap-3 overflow-hidden  sm:gap-3.5 ">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="h2 truncate text-ink">Foydalanuvchilar</h1>
+            <span className="rounded-full bg-muted px-2 py-0.5 font-geist text-[11px] font-bold tabular text-ink-2">
+              {number(totals.all)}
             </span>
-            <div className="mt-1.5 flex items-center gap-2.5">
-              <h1 className="font-geist text-[29px] font-extrabold leading-none tracking-[-0.035em] text-ink sm:text-[36px]">
-                Foydalanuvchilar
-              </h1>
-              <span className="rounded-full bg-muted px-2.5 py-1 font-geist text-[11px] font-bold tabular text-ink-2">
-                {number(totals.all)}
-              </span>
-            </div>
-            <p className="mt-1.5 hidden text-[13px] text-ink-3 sm:block">
-              Bazani filtrlang, obunalarni boshqaring va ommaviy amallarni bajaring.
-            </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => exportRows(filtered)}
               aria-label="CSV eksport"
-              className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-line bg-white px-3.5 font-geist text-[13px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-4"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-2.5 font-geist text-[12.5px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-3"
             >
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Export CSV</span>
@@ -396,7 +393,7 @@ export default function UsersPage() {
                 setProTargets(null)
                 setProOpen(true)
               }}
-              className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-ink px-3.5 font-geist text-[13px] font-bold text-white transition hover:bg-brand sm:px-4"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-ink px-2.5 font-geist text-[12.5px] font-bold text-white transition hover:bg-brand sm:px-3"
             >
               <Gem className="h-4 w-4" />
               <span className="hidden sm:inline">Pro berish</span>
@@ -638,7 +635,7 @@ export default function UsersPage() {
                     />
                   </th>
                   <th className="px-2 py-3 font-semibold">Foydalanuvchi</th>
-                  <th className="px-3 py-3 font-semibold">Viloyat</th>
+                  <th className="px-3 py-3 font-semibold">Tuman</th>
                   <th className="px-3 py-3 font-semibold">Obuna</th>
                   <th className="px-3 py-3 font-semibold">Faollik</th>
                   <th className="px-3 py-3 text-right font-semibold">XP / Daraja</th>
@@ -940,7 +937,7 @@ export default function UsersPage() {
                 <option value="pro">Pro</option>
               </select>
             </FilterField>
-            <FilterField label="Viloyat">
+            <FilterField label="Tuman">
               <select
                 value={region}
                 onChange={(event) => {
@@ -1077,8 +1074,39 @@ export default function UsersPage() {
             mumkin emas.
           </p>
           <div className="mt-3 rounded-lg bg-error-bg px-3 py-2 text-[12px] text-error">
-            Tegishli to'lovlar va natijalar arxivda saqlanadi, ammo foydalanuvchi ilovaga kira
-            olmaydi.
+            Buyurtmalar, murojaatlar va sertifikatlar ham o'chiriladi. To'lovlar va olimpiada
+            natijalari arxivda saqlanadi.
+          </div>
+        </Modal>
+
+        <Modal
+          open={blockTargets !== null}
+          onClose={() => setBlockTargets(null)}
+          title="Foydalanuvchilarni bloklash"
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setBlockTargets(null)}>
+                Bekor qilish
+              </Button>
+              <Button variant="destructive" onClick={confirmBulkBlock}>
+                <Ban className="h-4 w-4" /> Bloklash
+              </Button>
+            </>
+          }
+        >
+          <p className="text-[13px] text-ink-2">
+            {blockTargets?.length ?? 0} ta foydalanuvchi bloklanadi va ilovaga kira olmaydi.
+          </p>
+          <div className="mt-3 max-h-[180px] overflow-y-auto rounded-lg border border-line-2 bg-canvas px-3 py-2">
+            <ul className="divide-y divide-line-2 text-[12px] text-ink-2">
+              {blockTargets?.map((user) => (
+                <li key={user.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="truncate font-medium">{user.name}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-ink-3">{user.id}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </Modal>
       </div>

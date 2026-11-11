@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
-  HelpCircle,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -341,12 +340,12 @@ export function AdminShell({ children, email }: { children: React.ReactNode; ema
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-[72px] shrink-0 items-center gap-2 border-b border-line bg-white/90 px-3 backdrop-blur-md sm:gap-3 sm:px-5">
+        <header className="sticky top-0 z-40 flex h-[60px] shrink-0 items-center gap-2 border-b border-line bg-white/90 px-3 backdrop-blur-md sm:gap-3 sm:px-4">
           <button
             type="button"
             aria-label="Menyu"
             onClick={() => setMobileOpen(true)}
-            className="grid h-10 w-10 place-items-center rounded-[12px] border border-line bg-white text-ink transition-colors hover:border-ink/20 hover:bg-muted lg:hidden"
+            className="grid h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-ink transition-colors hover:border-ink/20 hover:bg-muted lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -354,7 +353,7 @@ export function AdminShell({ children, email }: { children: React.ReactNode; ema
             type="button"
             aria-label={collapsed ? 'Sidebarni ochish' : 'Sidebarni yopish'}
             onClick={() => setCollapsed((current) => !current)}
-            className="hidden h-10 w-10 place-items-center rounded-[12px] border border-line bg-white text-ink-3 transition-colors hover:border-ink/20 hover:bg-muted hover:text-ink lg:grid"
+            className="hidden h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-ink-3 transition-colors hover:border-ink/20 hover:bg-muted hover:text-ink lg:grid"
           >
             {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </button>
@@ -362,24 +361,24 @@ export function AdminShell({ children, email }: { children: React.ReactNode; ema
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="flex h-11 flex-1 items-center gap-2.5 rounded-[12px] border border-line bg-white px-3.5 text-left text-[13.5px] font-medium text-placeholder transition-colors hover:border-brand/50 hover:text-ink sm:max-w-[340px]"
+            className="flex h-9 flex-1 items-center gap-2 rounded-[10px] border border-line bg-white px-3 text-left text-[13px] font-medium text-placeholder transition-colors hover:border-brand/50 hover:text-ink sm:max-w-[320px]"
           >
-            <Search className="h-[18px] w-[18px] shrink-0" />
+            <Search className="h-[17px] w-[17px] shrink-0" />
             <span className="flex-1 truncate">Global qidiruv...</span>
-            <kbd className="hidden shrink-0 rounded-[6px] border border-line bg-muted px-2 py-1 text-[10.5px] font-bold text-ink-3 sm:block">
+            <kbd className="hidden shrink-0 rounded-[6px] border border-line bg-muted px-1.5 py-0.5 text-[10px] font-bold text-ink-3 sm:block">
               ⌘ K
             </kbd>
           </button>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-            <div className="hidden items-center rounded-[10px] border border-line bg-white p-1 sm:flex">
+            <div className="hidden items-center rounded-[9px] border border-line bg-white p-0.5 sm:flex">
               {(['uz', 'ru'] as const).map((code) => (
                 <button
                   key={code}
                   type="button"
                   onClick={() => setLang(code)}
                   className={cn(
-                    'h-8 rounded-[7px] px-2.5 text-[11.5px] font-bold uppercase transition-colors',
+                    'h-7 rounded-[7px] px-2.5 text-[11px] font-bold uppercase transition-colors',
                     lang === code ? 'bg-ink text-white' : 'text-ink-3 hover:text-ink',
                   )}
                 >
@@ -396,7 +395,7 @@ export function AdminShell({ children, email }: { children: React.ReactNode; ema
                   setBellOpen((current) => !current)
                   setProfileOpen(false)
                 }}
-                className="relative grid h-10 w-10 place-items-center rounded-[12px] border border-transparent text-ink-3 transition-colors hover:border-line hover:bg-muted hover:text-ink"
+                className="relative grid h-9 w-9 place-items-center rounded-[10px] border border-transparent text-ink-3 transition-colors hover:border-line hover:bg-muted hover:text-ink"
               >
                 <Bell className="h-5 w-5" />
                 <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-brand" />
@@ -450,7 +449,7 @@ export function AdminShell({ children, email }: { children: React.ReactNode; ema
                   setProfileOpen((current) => !current)
                   setBellOpen(false)
                 }}
-                className="flex h-11 items-center gap-2.5 rounded-[12px] border border-transparent pl-1.5 pr-2 transition-colors hover:border-line hover:bg-muted sm:pr-2.5"
+                className="flex h-9 items-center gap-2.5 rounded-[10px] border border-transparent pl-1.5 pr-2 transition-colors hover:border-line hover:bg-muted sm:pr-2.5"
               >
                 <Avatar name={profile.name} size="sm" tone="bg-brand-soft text-brand-text" />
                 <span className="hidden min-w-0 text-left sm:block">
@@ -524,18 +523,7 @@ export function AdminShell({ children, email }: { children: React.ReactNode; ema
         </header>
 
         <main className="min-w-0 flex-1">
-          <div className="mx-auto w-full max-w-[1500px] px-3.5 py-5 sm:px-6 sm:py-6">{children}</div>
-          <footer className="mx-auto flex w-full max-w-[1500px] flex-wrap items-center justify-between gap-2 px-3.5 pb-6 text-[11px] text-ink-3 sm:px-6">
-            <span>© 2026 HDP Academy · Admin panel v2.0</span>
-            <span className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(22,163,74,0.5)]" /> Tizim barqaror
-              </span>
-              <Link href="/admin/support" className="flex items-center gap-1 hover:text-brand-text">
-                <HelpCircle className="h-3.5 w-3.5" /> Yordam
-              </Link>
-            </span>
-          </footer>
+          <div className="mx-auto w-full max-w-[1500px] px-3 py-3 sm:px-4">{children}</div>
         </main>
       </div>
 

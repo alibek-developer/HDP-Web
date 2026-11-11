@@ -64,6 +64,8 @@ export default function UserDetailPage() {
 
   return (
     <PageTransition>
+      <div className="flex admin-workspace flex-col overflow-hidden  ">
+      <div className="shrink-0">
       <PageHeader
         title={user.name}
         subtitle={`#${user.id} · @${user.username}`}
@@ -91,7 +93,9 @@ export default function UserDetailPage() {
           </>
         }
       />
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2 pr-1">
       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <Card>
           <UserProfile
@@ -123,7 +127,7 @@ export default function UserDetailPage() {
                 <span className="font-semibold text-ink-2">{user.grade}-sinf</span>
               </li>
               <li className="flex justify-between gap-2">
-                <span>Viloyat</span>
+                <span>Tuman</span>
                 <span className="font-semibold text-ink-2">{user.region}</span>
               </li>
             </ul>
@@ -139,9 +143,11 @@ export default function UserDetailPage() {
           </Card>
         </div>
       </div>
+      </div>
 
       <GiveProModal open={proOpen} onClose={() => setProOpen(false)} targets={[user]} />
       <CoinsModal open={coinsOpen} onClose={() => setCoinsOpen(false)} targets={[user]} />
+      </div>
     </PageTransition>
   )
 }

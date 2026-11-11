@@ -535,10 +535,13 @@ export function OlympiadEditor({ olympiad }: { olympiad?: Olympiad }) {
       setTab('main')
       return
     }
-    upsertOlympiad({ ...draft, name: draft.name.trim() })
+    const saved = { ...draft, name: draft.name.trim() }
+    upsertOlympiad(saved)
+    baseline.current = saved
+    setDraft(saved)
     toast({
       title: olympiad ? 'Olimpiada yangilandi' : 'Olimpiada yaratildi',
-      description: draft.name.trim(),
+      description: saved.name,
     })
     router.push(`/admin/olympiads/${draft.id}`)
   }
@@ -608,7 +611,7 @@ export function OlympiadEditor({ olympiad }: { olympiad?: Olympiad }) {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
         <div className="flex shrink-0 items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
@@ -841,12 +844,12 @@ export function OlympiadEditor({ olympiad }: { olympiad?: Olympiad }) {
 
                 <Group title="Cheklovlar" hint="Bo'sh qoldirilsa — cheklov qo'llanilmaydi.">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Viloyat">
+                    <Field label="Tuman">
                       <Select
                         value={draft.regionLimit}
                         onChange={(event) => patch({ regionLimit: event.target.value })}
                       >
-                        <option value="">Barcha viloyatlar</option>
+                        <option value="">Barcha tumanlar</option>
                         {REGION_NAMES.map((name) => (
                           <option key={name} value={name}>
                             {name}

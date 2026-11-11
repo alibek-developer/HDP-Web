@@ -100,6 +100,12 @@ const generateCode = () => {
 
 const daysLeft = (expiresAt: string) => Math.ceil((new Date(expiresAt).getTime() - NOW) / DAY)
 
+const promoState = (promo: Promo): PromoStatus => {
+  if (promo.status === 'disabled') return 'disabled'
+  if (new Date(promo.expiresAt).getTime() < NOW || promo.used >= promo.limit) return 'expired'
+  return 'active'
+}
+
 export default function MarketingPage() {
   const promos = useAppStore((state) => state.promos)
   const campaigns = useAppStore((state) => state.campaigns)
@@ -121,7 +127,7 @@ export default function MarketingPage() {
   const filteredPromos = useMemo(() => {
     const term = search.trim().toLowerCase()
     return promos.filter((promo) => {
-      if (promoStatus !== 'all' && promo.status !== promoStatus) return false
+      if (promoStatus !== 'all' && promoState(promo) !== promoStatus) return false
       if (term && !promo.code.toLowerCase().includes(term)) return false
       return true
     })
@@ -160,6 +166,10 @@ export default function MarketingPage() {
   }
 
   const togglePromo = (promo: Promo) => {
+    if (promoState(promo) === 'expired') {
+      toast({ title: 'Muddati tugagan kodni yoqib bo‘lmaydi', description: 'Avval amal qilish muddatini yangilang.', tone: 'warning' })
+      return
+    }
     upsertPromo({ ...promo, status: promo.status === 'disabled' ? 'active' : 'disabled' })
     toast({
       title: promo.status === 'disabled' ? 'Promo kod yoqildi' : 'Promo kod to‘xtatildi',
@@ -208,29 +218,22 @@ export default function MarketingPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
-              <span className="text-ink-3">Dashboard</span>
-              <span className="text-placeholder">/</span>
-              <span className="text-ink">Marketing</span>
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-2">
-              <h1 className="h2 truncate text-ink">Marketing</h1>
-              <Badge tone="brand">{number(promos.length)} promo</Badge>
-            </div>
-            <p className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="h2 truncate text-ink">Marketing</h1>
+            <Badge tone="brand">{number(promos.length)} promo</Badge>
+            <span className="hidden truncate text-[12px] text-ink-3 lg:inline">
               Promo kodlar, referral dasturi va aksiyalarni boshqaring
-            </p>
+            </span>
           </div>
           {tab === 'promos' ? (
-            <Button onClick={() => setEditingPromo({ ...EMPTY_PROMO, code: generateCode() })} className="h-10 sm:h-11">
+            <Button onClick={() => setEditingPromo({ ...EMPTY_PROMO, code: generateCode() })} className="h-9">
               <Plus className="h-4 w-4" />
               <span className="max-[360px]:hidden">Yangi kod</span>
             </Button>
           ) : tab === 'campaigns' ? (
-            <Button onClick={() => setEditingCampaign({ ...EMPTY_CAMPAIGN })} className="h-10 sm:h-11">
+            <Button onClick={() => setEditingCampaign({ ...EMPTY_CAMPAIGN })} className="h-9">
               <Plus className="h-4 w-4" />
               <span className="max-[360px]:hidden">Yangi aksiya</span>
             </Button>
@@ -304,9 +307,9 @@ export default function MarketingPage() {
                   onChange={setPromoStatus}
                   options={[
                     { value: 'all', label: 'Barchasi', count: promos.length },
-                    { value: 'active', label: 'Faol', count: promos.filter((promo) => promo.status === 'active').length },
-                    { value: 'expired', label: 'Tugagan', count: promos.filter((promo) => promo.status === 'expired').length },
-                    { value: 'disabled', label: "O'chirilgan", count: promos.filter((promo) => promo.status === 'disabled').length },
+                    { value: 'active', label: 'Faol', count: promos.filter((promo) => promoState(promo) === 'active').length },
+                    { value: 'expired', label: 'Tugagan', count: promos.filter((promo) => promoState(promo) === 'expired').length },
+                    { value: 'disabled', label: "O'chirilgan", count: promos.filter((promo) => promoState(promo) === 'disabled').length },
                   ]}
                 />
               </div>
@@ -347,6 +350,7 @@ export default function MarketingPage() {
                       <tbody className="divide-y divide-line-2">
                         {filteredPromos.map((promo) => {
                           const left = daysLeft(promo.expiresAt)
+                          const state = promoState(promo)
                           return (
                             <tr key={promo.id} className="text-[12.5px] transition hover:bg-canvas">
                               <td className="px-4 py-2.5">
@@ -377,7 +381,7 @@ export default function MarketingPage() {
                               <td className="py-2.5 pr-3 text-ink-2">{PACKAGE_LABEL[promo.packageId]}</td>
                               <td className="py-2.5 pr-3">
                                 <div className="text-ink-3">{date(promo.expiresAt)}</div>
-                                {promo.status !== 'expired' ? (
+                                {state !== 'expired' ? (
                                   <span
                                     className={cn(
                                       'mt-0.5 inline-block rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
@@ -393,15 +397,15 @@ export default function MarketingPage() {
                                 ) : null}
                               </td>
                               <td className="py-2.5 pr-3">
-                                <Badge tone={PROMO_STATUS[promo.status].tone}>{PROMO_STATUS[promo.status].label}</Badge>
+                                <Badge tone={PROMO_STATUS[state].tone}>{PROMO_STATUS[state].label}</Badge>
                               </td>
                               <td className="px-4 py-2.5">
                                 <div className="flex items-center justify-end gap-1.5">
                                   <Button size="sm" variant="secondary" onClick={() => setEditingPromo(promo)}>
                                     <Pencil className="h-3.5 w-3.5" /> Tahrirlash
                                   </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => togglePromo(promo)} aria-label={promo.status === 'disabled' ? 'Yoqish' : 'Toʻxtatish'}>
-                                    {promo.status === 'disabled' ? (
+                                  <Button size="sm" variant="ghost" onClick={() => togglePromo(promo)} disabled={state === 'expired'} aria-label={state === 'disabled' ? 'Yoqish' : 'Toʻxtatish'}>
+                                    {state === 'disabled' ? (
                                       <Check className="h-3.5 w-3.5 text-success" />
                                     ) : (
                                       <RefreshCw className="h-3.5 w-3.5" />
@@ -422,6 +426,7 @@ export default function MarketingPage() {
                   <ul className="min-h-0 flex-1 divide-y divide-line-2 overflow-y-auto [contain:paint] md:hidden">
                     {filteredPromos.map((promo) => {
                       const left = daysLeft(promo.expiresAt)
+                      const state = promoState(promo)
                       return (
                         <li key={promo.id} className="px-3 py-2.5">
                           <div className="flex items-start justify-between gap-2">
@@ -431,7 +436,7 @@ export default function MarketingPage() {
                                 <Copy className="h-3.5 w-3.5" />
                               </button>
                             </span>
-                            <Badge tone={PROMO_STATUS[promo.status].tone}>{PROMO_STATUS[promo.status].label}</Badge>
+                            <Badge tone={PROMO_STATUS[state].tone}>{PROMO_STATUS[state].label}</Badge>
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-ink-3">
                             <span className="font-semibold text-ink">
@@ -439,7 +444,7 @@ export default function MarketingPage() {
                             </span>
                             <span>Paket: {PACKAGE_LABEL[promo.packageId]}</span>
                             <span>{date(promo.expiresAt)}</span>
-                            {promo.status !== 'expired' ? (
+                            {state !== 'expired' ? (
                               <span
                                 className={cn(
                                   'rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
@@ -462,8 +467,8 @@ export default function MarketingPage() {
                             <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditingPromo(promo)}>
                               <Pencil className="h-3.5 w-3.5" /> Tahrirlash
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => togglePromo(promo)}>
-                              {promo.status === 'disabled' ? 'Yoqish' : 'Toʻxtatish'}
+                            <Button size="sm" variant="ghost" onClick={() => togglePromo(promo)} disabled={state === 'expired'}>
+                              {state === 'disabled' ? 'Yoqish' : 'Toʻxtatish'}
                             </Button>
                             <Button size="sm" variant="ghost" onClick={() => setDeletePromoTarget(promo)} aria-label="O'chirish">
                               <Trash2 className="h-3.5 w-3.5 text-error" />

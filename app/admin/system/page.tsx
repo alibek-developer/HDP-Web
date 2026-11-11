@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import Link from 'next/link'
-import { ArrowDownToLine, ArrowUpRight, BellRing, Check, ChevronRight, CircleHelp, Clock3, Code2, Copy, DatabaseBackup, Eye, EyeOff, FileJson, FileText, Fingerprint, Globe2, Layers3, PlugZap, RefreshCw, RotateCcw, Save, Server, ShieldCheck, SlidersHorizontal, Smartphone, Terminal, Upload, Wrench, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpRight, Check, CircleHelp, Clock3, Code2, Copy, DatabaseBackup, Eye, EyeOff, FileJson, FileText, Fingerprint, Globe2, Layers3, PlugZap, RefreshCw, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Terminal, Trash2, Upload, Wrench, X } from 'lucide-react'
 import { PageTransition } from '@/components/layout/Page'
-import { Badge, Button, EmptyState, Field, IconButton, Input, Modal, SearchInput, Select, Switch, Textarea, cn, useToast } from '@/components/ui'
+import { Badge, Button, EmptyState, Field, IconButton, Input, Modal, Select, Switch, Textarea, cn, useToast } from '@/components/ui'
 import { useAppStore } from '@/lib/store'
 import { dateTime, downloadCsv, money, number, time } from '@/lib/format'
 import type { AppSettings, Backup, LogEntry } from '@/lib/types'
@@ -27,6 +26,10 @@ export default function SystemPage() {
   const backups = useAppStore((state) => state.backups)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const createBackup = useAppStore((state) => state.createBackup)
+  const restoreBackup = useAppStore((state) => state.restoreBackup)
+  const clearLogs = useAppStore((state) => state.clearLogs)
+  const deleteBackup = useAppStore((state) => state.deleteBackup)
+  const addLog = useAppStore((state) => state.addLog)
   const { toast } = useToast()
   const [tab, setTab] = useState<'app' | 'payments' | 'logs' | 'backup'>('app')
   const [draft, setDraft] = useState(settings)
@@ -38,10 +41,21 @@ export default function SystemPage() {
   const [logDetail, setLogDetail] = useState<LogEntry | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<Backup | null>(null)
   const [restoreText, setRestoreText] = useState('')
+  const [clearLogsOpen, setClearLogsOpen] = useState(false)
+  const [deleteBackupTarget, setDeleteBackupTarget] = useState<Backup | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings)
 
   useEffect(() => setDraft(settings), [settings])
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.replace('#', '')
+      if (hash === 'app' || hash === 'payments' || hash === 'logs' || hash === 'backup') setTab(hash)
+    }
+    applyHash()
+    window.addEventListener('hashchange', applyHash)
+    return () => window.removeEventListener('hashchange', applyHash)
+  }, [])
   useEffect(() => { scrollRef.current?.scrollTo(0, 0) }, [tab])
   useEffect(() => {
     if (!autoRefresh) return
@@ -66,9 +80,41 @@ export default function SystemPage() {
   const levelCounts = { error: logs.filter((e) => e.level === 'error').length, warning: logs.filter((e) => e.level === 'warning').length, info: logs.filter((e) => e.level === 'info').length }
   const lastSuccess = backups.find((backup) => backup.status === 'success')
   const failedCount = backups.filter((backup) => backup.status === 'failed').length
+  const nextAutoBackup = useMemo(() => {
+    if (!settings.autoBackup) return null
+    const base = Math.max(Date.now(), lastSuccess ? new Date(lastSuccess.at).getTime() : 0)
+    return new Date(base + settings.backupIntervalHours * 3_600_000)
+  }, [settings.autoBackup, settings.backupIntervalHours, lastSuccess])
+  const takeBackup = () => {
+    createBackup()
+    addLog({ at: new Date().toISOString(), level: 'info', message: 'Qo‘lda zaxira nusxasi yaratildi', user: 'Administrator', ip: 'local' })
+    toast({ title: 'Zaxira nusxasi yaratildi', description: 'Joriy ma’lumotlar sessiya xotirasiga saqlandi.', tone: 'success' })
+  }
+  const confirmClearLogs = () => {
+    clearLogs()
+    setClearLogsOpen(false)
+    toast({ title: 'Jurnal tozalandi', description: 'Barcha tizim yozuvlari o‘chirildi.', tone: 'success' })
+  }
+  const confirmDeleteBackup = () => {
+    if (!deleteBackupTarget) return
+    deleteBackup(deleteBackupTarget.id)
+    toast({ title: 'Nusxa o‘chirildi', description: dateTime(deleteBackupTarget.at), tone: 'success' })
+    setDeleteBackupTarget(null)
+  }
   const copy = async (value: string) => {
     try { await navigator.clipboard.writeText(value); toast({ title: 'Nusxalandi', tone: 'success' }) }
     catch { toast({ title: 'Nusxalab bo‘lmadi', description: 'Matnni belgilab nusxalang.', tone: 'warning' }) }
+  }
+  const confirmRestore = () => {
+    if (!restoreTarget) return
+    const ok = restoreBackup(restoreTarget.id)
+    setRestoreTarget(null)
+    setRestoreText('')
+    toast(
+      ok
+        ? { title: 'Ma’lumotlar tiklandi', description: 'Barcha bo‘limlar tanlangan nusxa holatiga qaytdi.', tone: 'success' }
+        : { title: 'Nusxa topilmadi', description: 'Sessiya yangilangan bo‘lishi mumkin. Yangi nusxa oling.', tone: 'warning' },
+    )
   }
   const downloadMetadata = (backup: Backup) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }))
@@ -81,22 +127,19 @@ export default function SystemPage() {
 
   return (
     <PageTransition>
-      <div data-system-workspace className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-brand">
-        <header className="flex shrink-0 items-end justify-between gap-3">
-          <div>
-            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12px] text-ink-3"><Link href="/admin" className="hover:text-brand">Dashboard</Link><ChevronRight className="h-3 w-3" /><span>Tizim</span></nav>
-            <h1 className="h2 mt-1 text-ink">Tizim boshqaruvi</h1>
+      <div data-system-workspace className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3  [@media(max-height:720px)]:gap-2 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-brand">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="h2 truncate text-ink">Tizim boshqaruvi</h1>
+            <Badge tone="brand">v{settings.currentVersion}</Badge>
+            <Badge tone={settings.maintenance ? 'warning' : 'gray'}>{settings.maintenance ? 'Texnik ishlar' : 'Demo'}</Badge>
           </div>
-          <div className="mb-0.5 flex items-center gap-2"><span className="hidden text-[12px] text-ink-3 sm:block">Mahalliy muhit</span><Badge tone="gray">Demo</Badge></div>
+          <span className="hidden font-mono text-[11px] text-ink-3 sm:inline">BUILD {settings.build}</span>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line-2 bg-white">
-          <div className="hidden shrink-0 items-center justify-between gap-4 border-b border-line-2 px-5 py-3 sm:flex">
-            <div className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink text-white"><Server className="h-[18px] w-[18px]" /></span><div className="min-w-0"><p className="truncate text-[13px] font-bold text-ink">{settings.appName}</p><p className="text-[11px] text-ink-3">Platforma konfiguratsiyasi</p></div></div>
-            <div className="flex items-center gap-5 text-[11px] text-ink-3"><span className="font-mono">BUILD <b className="font-medium text-ink">{settings.build}</b></span><Badge tone="brand">v{settings.currentVersion}</Badge></div>
-          </div>
           <nav aria-label="Tizim bo‘limlari" className="grid shrink-0 grid-cols-4 border-b border-line-2 bg-canvas/40 px-1 sm:px-4">
-            {SECTIONS.map(({ id, label, hint, icon: Icon }) => <button key={id} data-system-tab={id} type="button" aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)} className={cn('relative flex min-w-0 items-center justify-center gap-2 px-1 py-3 text-left transition sm:justify-start sm:px-3', tab === id ? 'text-brand-text' : 'text-ink-3 hover:bg-white hover:text-ink')}><Icon className="hidden h-[18px] w-[18px] shrink-0 min-[430px]:block" /><span><span className="block text-[12px] font-semibold sm:text-[13px]">{label}</span><span className="mt-0.5 hidden text-[10px] font-normal text-ink-3 lg:block">{hint}</span></span>{tab === id ? <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-brand sm:left-3 sm:right-6" /> : null}</button>)}
+            {SECTIONS.map(({ id, label, hint, icon: Icon }) => <button key={id} data-system-tab={id} type="button" aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)} className={cn('relative flex min-w-0 items-center justify-center gap-2 px-1 py-2 text-left transition sm:justify-start sm:px-3', tab === id ? 'text-brand-text' : 'text-ink-3 hover:bg-white hover:text-ink')}><Icon className="hidden h-[18px] w-[18px] shrink-0 min-[430px]:block" /><span><span className="block text-[12px] font-semibold sm:text-[13px]">{label}</span><span className="mt-0.5 hidden text-[10px] font-normal text-ink-3 lg:block">{hint}</span></span>{tab === id ? <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-brand sm:left-3 sm:right-6" /> : null}</button>)}
           </nav>
 
           {tab === 'app' ? <div data-system-panel="app" ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [contain:paint]">
@@ -140,7 +183,7 @@ export default function SystemPage() {
 
           {tab === 'logs' ? <div data-system-panel="logs" className="flex min-h-0 flex-1 flex-col">
             <div className="shrink-0 border-b border-line-2 px-3 py-3 sm:px-5">
-              <div className="flex items-center gap-3"><SearchInput aria-label="Jurnalni qidirish" value={logSearch} onChange={setLogSearch} placeholder="Xabar, foydalanuvchi yoki IP..." className="min-w-0 flex-1" /><IconButton label="Jurnalni CSV yuklab olish" onClick={() => downloadCsv('hdp-system-logs.csv', [['Vaqt', 'Daraja', 'Xabar', 'Foydalanuvchi', 'IP'], ...filteredLogs.map((entry) => [dateTime(entry.at), entry.level, entry.message, entry.user, entry.ip])])}><ArrowDownToLine className="h-4 w-4" /></IconButton><IconButton label="Jurnalni yangilash" onClick={() => setRefreshedAt(new Date())}><RefreshCw className="h-4 w-4" /></IconButton></div>
+              <div className="flex items-center gap-3"><div className="relative min-w-0 flex-1"><Input aria-label="Jurnalni qidirish" value={logSearch} onChange={(event) => setLogSearch(event.target.value)} placeholder="Xabar, foydalanuvchi yoki IP..." className="pr-10" />{logSearch ? <button type="button" aria-label="Tozalash" onClick={() => setLogSearch('')} className="absolute right-1 top-1 grid h-8 w-8 place-items-center rounded-md text-ink-3 hover:bg-muted"><X className="h-4 w-4" /></button> : null}</div><IconButton label="Jurnalni CSV yuklab olish" onClick={() => downloadCsv('hdp-system-logs.csv', [['Vaqt', 'Daraja', 'Xabar', 'Foydalanuvchi', 'IP'], ...filteredLogs.map((entry) => [dateTime(entry.at), entry.level, entry.message, entry.user, entry.ip])])}><ArrowDownToLine className="h-4 w-4" /></IconButton><IconButton label="Jurnalni yangilash" onClick={() => setRefreshedAt(new Date())}><RefreshCw className="h-4 w-4" /></IconButton><IconButton label="Jurnalni tozalash" disabled={logs.length === 0} onClick={() => setClearLogsOpen(true)}><Trash2 className="h-4 w-4 text-error" /></IconButton></div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><div className="flex gap-1" aria-label="Jurnal darajasi">{(['all', 'error', 'warning', 'info'] as const).map((value) => <button type="button" key={value} data-log-level={value} aria-pressed={value === level} onClick={() => setLevel(value)} className={cn('flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition sm:px-2.5 sm:text-[12px]', value === level ? 'bg-ink text-white' : 'text-ink-3 hover:bg-muted')}>{value === 'all' ? 'Barchasi' : LEVEL[value].label}<span className={cn('hidden min-[430px]:inline', value === level ? 'text-white/60' : 'text-ink-3')}>{value === 'all' ? logs.length : levelCounts[value]}</span></button>)}</div><div className="w-[138px]"><Select aria-label="Jurnal davri" value={period} onChange={(e) => setPeriod(e.target.value)}><option value="all">Barcha davr</option><option value="1">So‘nggi 1 soat</option><option value="6">So‘nggi 6 soat</option><option value="24">So‘nggi 24 soat</option></Select></div></div>
             </div>
             <div className="hidden shrink-0 grid-cols-[148px_76px_1fr_120px] gap-3 border-b border-line-2 bg-canvas/60 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-3 lg:grid"><span>Vaqt</span><span>Daraja</span><span>Voqea</span><span>Manba / IP</span></div>
@@ -152,12 +195,12 @@ export default function SystemPage() {
 
           {tab === 'backup' ? <div data-system-panel="backup" ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [contain:paint]">
             <div className="grid lg:grid-cols-[1fr_260px]">
-              <div className="min-w-0 p-4 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-[17px] font-bold tracking-tight text-ink">Zaxira nusxalar</h2><p className="mt-1 text-[12px] text-ink-3">Saqlangan nuqtalar va tiklash tarixi</p></div><Button data-backup-create size="sm" onClick={() => { createBackup(); toast({ title: 'Demo yozuv yaratildi', description: 'Haqiqiy ma’lumotlar arxivi yaratilmaydi.', tone: 'info' }) }}><DatabaseBackup className="h-4 w-4" />Nusxa olish</Button></div>
+              <div className="min-w-0 p-4 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-[17px] font-bold tracking-tight text-ink">Zaxira nusxalar</h2><p className="mt-1 text-[12px] text-ink-3">Saqlangan nuqtalar va tiklash tarixi</p></div><Button data-backup-create size="sm" onClick={takeBackup}><DatabaseBackup className="h-4 w-4" />Nusxa olish</Button></div>
                 <div className="mt-5 flex items-center gap-3 rounded-xl border border-line-2 bg-canvas/40 px-4 py-3"><ShieldCheck className="h-5 w-5 shrink-0 text-brand" /><div><p className="text-[12px] font-semibold text-ink">{lastSuccess ? 'Oxirgi muvaffaqiyatli nusxa' : 'Muvaffaqiyatli nusxa yo‘q'}</p><p className="mt-0.5 text-[11px] text-ink-3">{lastSuccess ? `${dateTime(lastSuccess.at)} · ${lastSuccess.size}` : 'Yangi nusxa olishdan boshlang'}</p></div></div>
                 <div className="mb-1 mt-6 flex items-center justify-between"><h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">Nusxalar tarixi</h3><span className="font-mono text-[11px] text-ink-3">{backups.length} yozuv</span></div>
-                {backups.length ? <ul>{backups.map((backup, index) => <li data-backup-row data-status={backup.status} key={backup.id} className="relative flex gap-3 py-4"><div className="relative flex w-7 shrink-0 justify-center"><span className={cn('z-10 mt-1 grid h-7 w-7 place-items-center rounded-full border bg-white', backup.status === 'success' ? 'border-line-2 text-ink-3' : 'border-red-200 text-error')} >{backup.status === 'success' ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}</span>{index !== backups.length - 1 ? <span className="absolute bottom-[-24px] top-8 w-px bg-line-2" /> : null}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[13px] font-semibold text-ink">{dateTime(backup.at)}</p><Badge tone={backup.status === 'success' ? 'success' : 'danger'}>{backup.status === 'success' ? 'Tayyor' : 'Xatolik'}</Badge></div><p className="mt-1 truncate font-mono text-[10px] text-ink-3">{backup.id} <span className="mx-1">·</span> {backup.size}</p><div className="mt-2 flex flex-wrap items-center gap-1"><Button data-backup-metadata size="sm" variant="ghost" onClick={() => downloadMetadata(backup)}><FileJson className="h-3.5 w-3.5" />Ma’lumot</Button><Button data-backup-restore size="sm" variant="ghost" disabled={backup.status !== 'success'} onClick={() => { setRestoreTarget(backup); setRestoreText('') }}><RotateCcw className="h-3.5 w-3.5" />Tiklash</Button></div></div></li>)}</ul> : <EmptyState icon={<DatabaseBackup className="h-6 w-6" />} title="Zaxira nusxa yo‘q" text="Nusxalar tarixi shu yerda ko‘rinadi." />}
+                {backups.length ? <ul>{backups.map((backup, index) => <li data-backup-row data-status={backup.status} key={backup.id} className="relative flex gap-3 py-4"><div className="relative flex w-7 shrink-0 justify-center"><span className={cn('z-10 mt-1 grid h-7 w-7 place-items-center rounded-full border bg-white', backup.status === 'success' ? 'border-line-2 text-ink-3' : 'border-red-200 text-error')} >{backup.status === 'success' ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}</span>{index !== backups.length - 1 ? <span className="absolute bottom-[-24px] top-8 w-px bg-line-2" /> : null}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[13px] font-semibold text-ink">{dateTime(backup.at)}</p><Badge tone={backup.status === 'success' ? 'success' : 'danger'}>{backup.status === 'success' ? 'Tayyor' : 'Xatolik'}</Badge></div><p className="mt-1 truncate font-mono text-[10px] text-ink-3">{backup.id} <span className="mx-1">·</span> {backup.size}</p><div className="mt-2 flex flex-wrap items-center gap-1"><Button data-backup-metadata size="sm" variant="ghost" onClick={() => downloadMetadata(backup)}><FileJson className="h-3.5 w-3.5" />Ma’lumot</Button><Button data-backup-restore size="sm" variant="ghost" disabled={backup.status !== 'success'} onClick={() => { setRestoreTarget(backup); setRestoreText('') }}><RotateCcw className="h-3.5 w-3.5" />Tiklash</Button><IconButton label={`${dateTime(backup.at)} nusxasini o‘chirish`} onClick={() => setDeleteBackupTarget(backup)}><Trash2 className="h-4 w-4 text-error" /></IconButton></div></div></li>)}</ul> : <EmptyState icon={<DatabaseBackup className="h-6 w-6" />} title="Zaxira nusxa yo‘q" text="Nusxalar tarixi shu yerda ko‘rinadi." />}
               </div>
-              <aside className="border-t border-line-2 bg-[#fafaf9] p-5 lg:border-l lg:border-t-0"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">Saqlash xulosasi</p><div className="mt-4 flex items-end gap-2"><span className="font-display text-[40px] font-semibold leading-none tracking-[-0.06em] text-ink">{backups.length}</span><span className="pb-1 text-[12px] text-ink-3">jami nusxa</span></div><div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-line-2">{backups.length ? <><span className="bg-brand" style={{ width: `${(backups.length - failedCount) / backups.length * 100}%` }} /><span className="bg-error" style={{ width: `${failedCount / backups.length * 100}%` }} /></> : null}</div><div className="mt-3 flex justify-between text-[11px] text-ink-3"><span>{backups.length - failedCount} tayyor</span><span>{failedCount} xatolik</span></div><div className="mt-6 border-t border-line-2 pt-5"><div className="flex items-center gap-2 text-[12px] font-semibold text-ink"><Clock3 className="h-4 w-4" />Avtomatik zaxira</div><p className="mt-2 text-[12px] leading-relaxed text-ink-3">Server ulanmagan. Keyingi nusxa olish vaqti belgilanmagan.</p></div><div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/60 p-4"><p className="text-[12px] font-semibold text-amber-900">Tiklashdan oldin</p><p className="mt-2 text-[11px] leading-relaxed text-amber-800">Haqiqiy muhitda tiklash joriy ma’lumotlarni almashtiradi. Avval yangi nusxa oling.</p></div><p className="mt-4 text-[11px] leading-relaxed text-ink-3">Demo rejimda faqat nusxa yozuvlari boshqariladi. “Ma’lumot” tugmasi JSON tavsifini yuklaydi, ma’lumotlar bazasi arxivini emas.</p></aside>
+              <aside className="border-t border-line-2 bg-[#fafaf9] p-5 lg:border-l lg:border-t-0"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">Saqlash xulosasi</p><div className="mt-4 flex items-end gap-2"><span className="font-display text-[40px] font-semibold leading-none tracking-[-0.06em] text-ink">{backups.length}</span><span className="pb-1 text-[12px] text-ink-3">jami nusxa</span></div><div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-line-2">{backups.length ? <><span className="bg-brand" style={{ width: `${(backups.length - failedCount) / backups.length * 100}%` }} /><span className="bg-error" style={{ width: `${failedCount / backups.length * 100}%` }} /></> : null}</div><div className="mt-3 flex justify-between text-[11px] text-ink-3"><span>{backups.length - failedCount} tayyor</span><span>{failedCount} xatolik</span></div><div className="mt-6 border-t border-line-2 pt-5"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-[12px] font-semibold text-ink"><Clock3 className="h-4 w-4" />Avtomatik zaxira</div><Switch label="Avtomatik zaxira" size="sm" checked={settings.autoBackup} onChange={(autoBackup) => { updateSettings({ autoBackup }); toast({ title: autoBackup ? 'Avtomatik zaxira yoqildi' : 'Avtomatik zaxira o‘chirildi', tone: 'success' }) }} /></div><div className="mt-3"><Select aria-label="Zaxira oralig‘i" value={settings.backupIntervalHours} disabled={!settings.autoBackup} onChange={(event) => { updateSettings({ backupIntervalHours: Number(event.target.value) }); toast({ title: 'Zaxira oralig‘i yangilandi', tone: 'success' }) }} className="w-full"><option value={6}>Har 6 soat</option><option value={12}>Har 12 soat</option><option value={24}>Har 24 soat</option><option value={72}>Har 3 kunda</option><option value={168}>Har haftada</option></Select></div><p className="mt-2 text-[11px] leading-relaxed text-ink-3">{settings.autoBackup && nextAutoBackup ? `Keyingi nusxa: ${dateTime(nextAutoBackup.toISOString())}` : 'Avtomatik zaxira o‘chirilgan. Faqat qo‘lda nusxa olinadi.'}</p></div><div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/60 p-4"><p className="text-[12px] font-semibold text-amber-900">Tiklashdan oldin</p><p className="mt-2 text-[11px] leading-relaxed text-amber-800">Haqiqiy muhitda tiklash joriy ma’lumotlarni almashtiradi. Avval yangi nusxa oling.</p></div><p className="mt-4 text-[11px] leading-relaxed text-ink-3">Demo rejimda faqat nusxa yozuvlari boshqariladi. “Ma’lumot” tugmasi JSON tavsifini yuklaydi, ma’lumotlar bazasi arxivini emas.</p></aside>
             </div>
           </div> : null}
 
@@ -168,8 +211,14 @@ export default function SystemPage() {
       <Modal open={logDetail !== null} onClose={() => setLogDetail(null)} title="Voqea tafsilotlari" description={logDetail?.id} size="md" footer={<Button variant="ghost" onClick={() => setLogDetail(null)}>Yopish</Button>}>
         {logDetail ? <div className="space-y-5"><div className="flex items-center justify-between gap-3"><Badge tone={LEVEL[logDetail.level].tone}>{LEVEL[logDetail.level].label}</Badge><span className="font-mono text-[11px] text-ink-3">{dateTime(logDetail.at)}</span></div><p className="break-words rounded-xl border border-line-2 bg-canvas p-4 font-mono text-[13px] leading-relaxed text-ink">{logDetail.message}</p><dl className="grid grid-cols-2 gap-4"><div><dt className="text-[11px] text-ink-3">Foydalanuvchi</dt><dd className="mt-1 text-[13px] font-semibold text-ink">{logDetail.user}</dd></div><div><dt className="text-[11px] text-ink-3">IP manzil</dt><dd className="mt-1 font-mono text-[13px] text-ink">{logDetail.ip}</dd></div></dl><Button size="sm" variant="secondary" onClick={() => copy(JSON.stringify(logDetail, null, 2))}><Copy className="h-3.5 w-3.5" />JSON nusxalash</Button></div> : null}
       </Modal>
-      <Modal open={restoreTarget !== null} onClose={() => setRestoreTarget(null)} title="Zaxira nusxasini tiklash" description={restoreTarget ? dateTime(restoreTarget.at) : undefined} size="sm" footer={<><Button variant="ghost" onClick={() => setRestoreTarget(null)}>Bekor qilish</Button><Button data-confirm-restore variant="destructive" disabled={restoreText !== 'TIKLASH'} onClick={() => { setRestoreTarget(null); toast({ title: 'Demo: tiklash bajarilmadi', description: 'Ma’lumotlar o‘zgartirilmadi. Haqiqiy tiklash uchun backend kerak.', tone: 'warning' }) }}><RotateCcw className="h-4 w-4" />Tiklash</Button></>}>
-        <div className="space-y-4"><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] leading-relaxed text-amber-900">Haqiqiy muhitda bu amal joriy ma’lumotlarni tanlangan nusxa bilan almashtiradi. Demo rejimda hech qanday ma’lumot o‘zgarmaydi.</div><Field label="Tasdiqlash uchun TIKLASH deb yozing"><Input aria-label="Tiklashni tasdiqlash" value={restoreText} onChange={(e) => setRestoreText(e.target.value)} autoComplete="off" placeholder="TIKLASH" /></Field></div>
+      <Modal open={restoreTarget !== null} onClose={() => setRestoreTarget(null)} title="Zaxira nusxasini tiklash" description={restoreTarget ? dateTime(restoreTarget.at) : undefined} size="sm" footer={<><Button variant="ghost" onClick={() => setRestoreTarget(null)}>Bekor qilish</Button><Button data-confirm-restore variant="destructive" disabled={restoreText !== 'TIKLASH'} onClick={confirmRestore}><RotateCcw className="h-4 w-4" />Tiklash</Button></>}>
+        <div className="space-y-4"><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[12px] leading-relaxed text-amber-900">Bu amal barcha bo‘limlardagi joriy ma’lumotlarni tanlangan nusxa holati bilan almashtiradi. Davom etishdan oldin yangi nusxa olish tavsiya etiladi.</div><Field label="Tasdiqlash uchun TIKLASH deb yozing"><Input aria-label="Tiklashni tasdiqlash" value={restoreText} onChange={(e) => setRestoreText(e.target.value)} autoComplete="off" placeholder="TIKLASH" /></Field></div>
+      </Modal>
+      <Modal open={clearLogsOpen} onClose={() => setClearLogsOpen(false)} title="Jurnalni tozalash" description={`${number(logs.length)} yozuv o‘chiriladi`} size="sm" footer={<><Button variant="ghost" onClick={() => setClearLogsOpen(false)}>Bekor qilish</Button><Button variant="destructive" onClick={confirmClearLogs}><Trash2 className="h-4 w-4" />Tozalash</Button></>}>
+        <p className="text-[13px] leading-relaxed text-ink-2">Tizim jurnalidagi barcha yozuvlar sessiyadan o‘chiriladi. Bu amalni qaytarib bo‘lmaydi; yangi voqealar yana avtomatik yozila boshlaydi.</p>
+      </Modal>
+      <Modal open={deleteBackupTarget !== null} onClose={() => setDeleteBackupTarget(null)} title="Nusxani o‘chirish" description={deleteBackupTarget ? dateTime(deleteBackupTarget.at) : undefined} size="sm" footer={<><Button variant="ghost" onClick={() => setDeleteBackupTarget(null)}>Bekor qilish</Button><Button variant="destructive" onClick={confirmDeleteBackup}><Trash2 className="h-4 w-4" />O‘chirish</Button></>}>
+        <p className="text-[13px] leading-relaxed text-ink-2">Bu zaxira nusxasi tarixdan o‘chiriladi. Agar u joriy sessiyada yaratilgan bo‘lsa, uni endi tiklab bo‘lmaydi.</p>
       </Modal>
     </PageTransition>
   )

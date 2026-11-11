@@ -9,7 +9,7 @@ import { useAppStore } from '@/lib/store'
 import { number } from '@/lib/format'
 
 export const contentRoot =
-  'flex h-[calc(100dvh-177px)] flex-col gap-3 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)]'
+  'flex admin-workspace flex-col gap-3 overflow-hidden  sm:gap-3.5 '
 
 const TABS = [
   { href: '/admin/content', label: 'Fanlar', icon: Layers, count: 'subjects' as const },
@@ -19,40 +19,30 @@ const TABS = [
 ]
 
 export function ContentHeader({
-  eyebrow,
   title,
   count,
   subtitle,
   actions,
 }: {
-  eyebrow?: string
   title: string
   count?: number
   subtitle?: string
   actions?: ReactNode
 }) {
   return (
-    <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        <span className="inline-flex items-center gap-2 font-geist text-[10.5px] font-bold uppercase tracking-[0.16em] text-ink-3">
-          <span className="h-px w-6 bg-brand" />
-          {eyebrow ?? 'HDP Academy · Kontent'}
-        </span>
-        <div className="mt-1.5 flex items-center gap-2.5">
-          <h1 className="font-geist text-[29px] font-extrabold leading-none tracking-[-0.035em] text-ink sm:text-[36px]">
-            {title}
-          </h1>
-          {typeof count === 'number' ? (
-            <span className="rounded-full bg-muted px-2.5 py-1 font-geist text-[11px] font-bold tabular text-ink-2">
-              {number(count)}
-            </span>
-          ) : null}
-        </div>
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <h1 className="h2 truncate text-ink">{title}</h1>
+        {typeof count === 'number' ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 font-geist text-[11px] font-bold tabular text-ink-2">
+            {number(count)}
+          </span>
+        ) : null}
         {subtitle ? (
-          <p className="mt-1.5 hidden text-[13px] text-ink-3 sm:block">{subtitle}</p>
+          <span className="hidden truncate text-[12px] text-ink-3 lg:inline">{subtitle}</span>
         ) : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex items-center gap-1.5">{actions}</div> : null}
     </header>
   )
 }

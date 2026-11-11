@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { Library, Trophy, Users } from 'lucide-react'
-import { ADMIN_EMAIL, ADMIN_PASSWORD, demoHintVisible, readSession } from '@/lib/auth'
+import { demoCredentials, readSession } from '@/lib/auth'
 import LoginForm from './LoginForm'
 
 export const metadata = { title: 'Kirish — HDP Academy' }
@@ -59,9 +59,7 @@ export default async function LoginPage() {
                 Panelga kirish uchun admin hisobingizdan foydalaning.
               </p>
 
-              <LoginForm
-                demo={demoHintVisible ? { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } : null}
-              />
+              <LoginForm demo={demoCredentials()} />
             </div>
           </div>
 

@@ -267,6 +267,24 @@ export interface NotificationRecord {
   read: number
   clicked: number
   scheduled: boolean
+  scheduledAt?: string
+}
+
+export type AutomationTrigger = 'signup' | 'plan_expiring' | 'inactive' | 'streak' | 'payment_failed'
+
+export interface NotificationAutomation {
+  id: string
+  name: string
+  trigger: AutomationTrigger
+  audience: NotificationAudience
+  type: NotificationType
+  delayHours: number
+  enabled: boolean
+  title: string
+  body: string
+  link: string
+  lastRunAt?: string
+  sent: number
 }
 
 export interface LogEntry {
@@ -336,12 +354,21 @@ export interface AppSettings {
   click: { serviceId: string; secretKey: string }
   uzum: { merchantId: string; secretKey: string }
   prices: { '1m': number; '3m': number; '1y': number; trialDays: number }
+  autoBackup: boolean
+  backupIntervalHours: number
+}
+
+export interface ProfilePreferences {
+  emailReports: boolean
+  securityAlerts: boolean
+  weeklyDigest: boolean
 }
 
 export interface Profile {
   name: string
   email: string
   avatar: string | null
+  preferences: ProfilePreferences
 }
 
 export interface RegionStat {

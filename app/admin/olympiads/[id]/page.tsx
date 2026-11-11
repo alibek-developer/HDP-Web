@@ -133,7 +133,7 @@ export default function OlympiadDetailPage() {
   if (!olympiad) {
     return (
       <PageTransition>
-        <div className="flex h-[calc(100dvh-177px)] min-[430px]:h-[calc(100dvh-153px)] sm:h-[calc(100dvh-161px)]">
+        <div className="flex admin-workspace  ">
           <div className="grid h-full w-full place-items-center rounded-[16px] border border-dashed border-line bg-white/60 px-4">
             <EmptyState
               title="Olimpiada topilmadi"
@@ -164,7 +164,7 @@ export default function OlympiadDetailPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
         <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
@@ -418,7 +418,7 @@ export default function OlympiadDetailPage() {
                 <FactRow icon={<AudienceIcon className="h-3.5 w-3.5" />} label="Auditoriya" value={audience.label} />
                 <FactRow
                   icon={<CalendarDays className="h-3.5 w-3.5" />}
-                  label="Viloyat"
+                  label="Tuman"
                   value={olympiad.regionLimit || 'Barchasi'}
                 />
                 <FactRow

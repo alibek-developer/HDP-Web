@@ -309,23 +309,16 @@ export default function PaymentsPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3.5 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2">
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3.5  [@media(max-height:720px)]:gap-2">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-3">
-              <span className="text-ink-3">Dashboard</span>
-              <span className="text-placeholder">/</span>
-              <span className="text-ink">To'lovlar</span>
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-2">
-              <h1 className="h2 truncate text-ink">To'lovlar</h1>
-              <Badge tone="gray">{number(transactions.length)} ta</Badge>
-            </div>
-            <p className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="h2 truncate text-ink">To'lovlar</h1>
+            <Badge tone="gray">{number(transactions.length)} ta</Badge>
+            <span className="hidden truncate text-[12px] text-ink-3 lg:inline">
               Tranzaksiyalar, qaytarishlar va daromad ko'rsatkichlari
-            </p>
+            </span>
           </div>
-          <Button variant="secondary" onClick={exportCsv} className="h-10 sm:h-11">
+          <Button variant="secondary" onClick={exportCsv} className="h-9">
             <Download className="h-4 w-4" />
             <span className="max-[360px]:hidden">Eksport CSV</span>
           </Button>

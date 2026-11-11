@@ -1,19 +1,23 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import {
   Bell,
   BellRing,
   Check,
+  Clock,
   Eye,
   Link2,
   Megaphone,
   MousePointerClick,
+  PencilLine,
+  Play,
+  Plus,
   Send,
   Smartphone,
   Trash2,
   Users,
+  Zap,
 } from 'lucide-react'
 import { PageTransition } from '@/components/layout/Page'
 import {
@@ -27,14 +31,21 @@ import {
   ProgressBar,
   SearchInput,
   Select,
+  Switch,
   Textarea,
   cn,
   useToast,
 } from '@/components/ui'
 import { useAppStore } from '@/lib/store'
-import { MOCK_NOW, dateTime, number, percent } from '@/lib/format'
+import { MOCK_NOW, dateTime, number, percent, relative } from '@/lib/format'
 import { REGION_NAMES } from '@/lib/mock'
-import type { NotificationAudience, NotificationRecord, NotificationType } from '@/lib/types'
+import type {
+  AutomationTrigger,
+  NotificationAudience,
+  NotificationAutomation,
+  NotificationRecord,
+  NotificationType,
+} from '@/lib/types'
 
 const AUDIENCE_LABEL: Record<NotificationAudience, string> = {
   all: 'Hamma',
@@ -60,6 +71,43 @@ const TYPE_TONE: Record<NotificationType, 'info' | 'violet' | 'brand'> = {
   push: 'info',
   inapp: 'violet',
   both: 'brand',
+}
+
+const TRIGGERS: Record<AutomationTrigger, { label: string; hint: string; tone: 'success' | 'warning' | 'gray' | 'brand' | 'danger' }> = {
+  signup: { label: "Ro'yxatdan o'tish", hint: "Yangi foydalanuvchi qo'shilganda darhol yoki N soatdan keyin", tone: 'success' },
+  plan_expiring: { label: 'Obuna tugashi', hint: 'Pro obuna tugashiga N soat qolganda', tone: 'warning' },
+  inactive: { label: 'Nofaollik', hint: 'N soat davomida tizimga kirmaganlarga', tone: 'gray' },
+  streak: { label: 'Streak', hint: 'Faol kunlik seriyasi bor foydalanuvchilarga', tone: 'brand' },
+  payment_failed: { label: "To'lov xatosi", hint: "Bekor qilingan to'lovdan keyin", tone: 'danger' },
+}
+
+interface AutomationDraft {
+  id: string | null
+  name: string
+  trigger: AutomationTrigger
+  audience: NotificationAudience
+  type: NotificationType
+  delayHours: number
+  enabled: boolean
+  title: string
+  body: string
+  link: string
+  lastRunAt?: string
+  sent: number
+}
+
+const EMPTY_AUTOMATION: AutomationDraft = {
+  id: null,
+  name: '',
+  trigger: 'signup',
+  audience: 'all',
+  type: 'inapp',
+  delayHours: 0,
+  enabled: true,
+  title: '',
+  body: '',
+  link: '',
+  sent: 0,
 }
 
 const DEFAULT_SCHEDULE = () => {
@@ -163,11 +211,17 @@ function MobilePreview({ type, title, body, link }: { type: NotificationType; ti
 export default function NotificationsPage() {
   const users = useAppStore((state) => state.users)
   const notifications = useAppStore((state) => state.notifications)
+  const automations = useAppStore((state) => state.automations)
   const sendNotification = useAppStore((state) => state.sendNotification)
+  const updateNotification = useAppStore((state) => state.updateNotification)
   const deleteNotification = useAppStore((state) => state.deleteNotification)
+  const upsertAutomation = useAppStore((state) => state.upsertAutomation)
+  const deleteAutomation = useAppStore((state) => state.deleteAutomation)
+  const toggleAutomation = useAppStore((state) => state.toggleAutomation)
+  const runAutomation = useAppStore((state) => state.runAutomation)
   const { toast } = useToast()
 
-  const [tab, setTab] = useState<'send' | 'history'>('send')
+  const [tab, setTab] = useState<'send' | 'history' | 'automations'>('send')
   const [audience, setAudience] = useState<NotificationAudience>('all')
   const [type, setType] = useState<NotificationType>('push')
   const [title, setTitle] = useState('')
@@ -183,6 +237,11 @@ export default function NotificationsPage() {
   const [audienceFilter, setAudienceFilter] = useState<'any' | NotificationAudience>('any')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<NotificationRecord | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const [automationDraft, setAutomationDraft] = useState<AutomationDraft>(EMPTY_AUTOMATION)
+  const [automationModalOpen, setAutomationModalOpen] = useState(false)
+  const [automationDelete, setAutomationDelete] = useState<NotificationAutomation | null>(null)
 
   const detail = notifications.find((record) => record.id === detailId) ?? null
 
@@ -221,6 +280,32 @@ export default function NotificationsPage() {
     setCustomPlan('all')
     setCustomStatus('all')
     setCustomRegion('all')
+    setEditingId(null)
+  }
+
+  const toInputValue = (iso?: string) => {
+    if (!iso) return DEFAULT_SCHEDULE()
+    const value = new Date(iso)
+    if (Number.isNaN(value.getTime())) return DEFAULT_SCHEDULE()
+    const pad = (part: number) => String(part).padStart(2, '0')
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`
+  }
+
+  const startEdit = (record: NotificationRecord) => {
+    if (!record.scheduled) return
+    setEditingId(record.id)
+    setTitle(record.title)
+    setBody(record.body)
+    setLink(record.link)
+    setAudience(record.audience)
+    setType(record.type)
+    setSchedule('later')
+    setScheduledAt(toInputValue(record.scheduledAt))
+    setCustomPlan('all')
+    setCustomStatus('all')
+    setCustomRegion('all')
+    setDetailId(null)
+    setTab('send')
   }
 
   const submit = () => {
@@ -229,7 +314,31 @@ export default function NotificationsPage() {
     if (schedule === 'later' && new Date(scheduledAt) <= MOCK_NOW) {
       return toast({ title: 'Rejalashtirilgan vaqt kelajakda bo‘lishi kerak', tone: 'warning' })
     }
-    sendNotification({ title: title.trim(), body: body.trim(), link: link.trim(), audience, type, recipients, scheduled: schedule === 'later' })
+    const payload = {
+      title: title.trim(),
+      body: body.trim(),
+      link: link.trim(),
+      audience,
+      type,
+      recipients,
+      scheduled: schedule === 'later',
+      scheduledAt: schedule === 'later' ? new Date(scheduledAt).toISOString() : undefined,
+    }
+    if (editingId) {
+      updateNotification(
+        editingId,
+        schedule === 'later' ? payload : { ...payload, sentAt: new Date().toISOString() },
+      )
+      toast({
+        title: schedule === 'later' ? 'Reja yangilandi' : 'Bildirishnoma yuborildi',
+        description: `${number(recipients)} foydalanuvchiga · ${TYPE_LABEL[type]}`,
+        tone: 'success',
+      })
+      resetForm()
+      setTab('history')
+      return
+    }
+    sendNotification(payload)
     toast({
       title: schedule === 'later' ? 'Bildirishnoma rejalashtirildi' : 'Bildirishnoma yuborildi',
       description: `${number(recipients)} foydalanuvchiga · ${TYPE_LABEL[type]}`,
@@ -247,29 +356,94 @@ export default function NotificationsPage() {
     setDeleteTarget(null)
   }
 
+  const enabledCount = automations.filter((rule) => rule.enabled).length
+  const totalAutomated = automations.reduce((sum, rule) => sum + rule.sent, 0)
+  const lastAutomationAt = automations.reduce<string | undefined>((latest, rule) => {
+    if (!rule.lastRunAt) return latest
+    return !latest || rule.lastRunAt > latest ? rule.lastRunAt : latest
+  }, undefined)
+
+  const openAutomation = (rule?: NotificationAutomation) => {
+    setAutomationDraft(rule ? { ...rule } : { ...EMPTY_AUTOMATION })
+    setAutomationModalOpen(true)
+  }
+
+  const saveAutomation = () => {
+    const name = automationDraft.name.trim()
+    const autoTitle = automationDraft.title.trim()
+    const autoBody = automationDraft.body.trim()
+    if (!name) return toast({ title: 'Qoida nomini kiriting', tone: 'warning' })
+    if (!autoTitle) return toast({ title: 'Xabar sarlavhasini kiriting', tone: 'warning' })
+    if (!autoBody) return toast({ title: 'Xabar matnini kiriting', tone: 'warning' })
+    if (!Number.isFinite(automationDraft.delayHours) || automationDraft.delayHours < 0) {
+      return toast({ title: 'Kechikish soati noto‘g‘ri', description: '0 yoki undan katta butun son kiriting', tone: 'warning' })
+    }
+    const automation: NotificationAutomation = {
+      id: automationDraft.id ?? `auto-${Date.now().toString(36)}`,
+      name,
+      trigger: automationDraft.trigger,
+      audience: automationDraft.audience,
+      type: automationDraft.type,
+      delayHours: Math.round(automationDraft.delayHours),
+      enabled: automationDraft.enabled,
+      title: autoTitle,
+      body: autoBody,
+      link: automationDraft.link.trim(),
+      lastRunAt: automationDraft.lastRunAt,
+      sent: automationDraft.sent,
+    }
+    upsertAutomation(automation)
+    setAutomationModalOpen(false)
+    toast({
+      title: automationDraft.id ? 'Qoida yangilandi' : 'Avtomatik qoida qo‘shildi',
+      description: `${name} · ${TRIGGERS[automation.trigger].label}`,
+      tone: 'success',
+    })
+  }
+
+  const removeAutomation = () => {
+    if (!automationDelete) return
+    deleteAutomation(automationDelete.id)
+    toast({ title: 'Qoida o‘chirildi', description: automationDelete.name, tone: 'success' })
+    setAutomationDelete(null)
+  }
+
+  const runNow = (rule: NotificationAutomation) => {
+    const count = runAutomation(rule.id)
+    toast({
+      title: count ? 'Qoida ishga tushirildi' : 'Mos foydalanuvchi topilmadi',
+      description: count ? `${rule.name} · ${number(count)} qabul qiluvchi` : 'Shartlarga mos foydalanuvchi yo‘q, xabar yuborilmadi',
+      tone: count ? 'success' : 'warning',
+    })
+  }
+
   return (
     <PageTransition>
-      <div className="flex h-[calc(100dvh-177px)] flex-col gap-2.5 overflow-hidden min-[430px]:h-[calc(100dvh-153px)] sm:gap-3 sm:h-[calc(100dvh-161px)] [@media(max-height:720px)]:gap-2 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-brand">
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <nav className="flex items-center gap-1.5 text-[12px] text-ink-3" aria-label="Breadcrumb">
-              <Link href="/admin" className="transition hover:text-brand">Dashboard</Link>
-              <span aria-hidden="true">/</span>
-              <span className="font-medium text-ink-2">Bildirishnomalar</span>
-            </nav>
-            <div className="mt-1 flex flex-wrap items-center gap-2.5">
-              <h1 className="h2 text-ink">Bildirishnomalar</h1>
-              <Badge tone="brand">{number(notifications.length)} ta</Badge>
-            </div>
+      <div className="flex admin-workspace flex-col gap-2.5 overflow-hidden  sm:gap-3  [@media(max-height:720px)]:gap-2 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-brand">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="h2 truncate text-ink">Bildirishnomalar</h1>
+            <Badge tone="brand">{number(notifications.length)} ta</Badge>
+            {enabledCount ? <Badge tone="success">{enabledCount} avtomatik</Badge> : null}
           </div>
-          <div role="group" aria-label="Bildirishnomalar bo‘limi" className="grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:inline-flex">
-            <button type="button" aria-pressed={tab === 'send'} onClick={() => setTab('send')} className={cn('inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-semibold transition', tab === 'send' ? 'bg-white text-brand-text shadow-sm' : 'text-ink-3 hover:text-ink-2')}>
-              <Send className="h-4 w-4" /> Yuborish
-            </button>
-            <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')} className={cn('inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-[13px] font-semibold transition', tab === 'history' ? 'bg-white text-brand-text shadow-sm' : 'text-ink-3 hover:text-ink-2')}>
-              <Bell className="h-4 w-4" /> Tarix
-              <span className={cn('rounded-full px-1.5 py-0.5 text-[11px] tabular', tab === 'history' ? 'bg-brand-soft text-brand-text' : 'bg-white/70 text-ink-3')}>{notifications.length}</span>
-            </button>
+          <div className="flex items-center gap-2">
+            <div role="group" aria-label="Bildirishnomalar bo‘limi" className="grid shrink-0 grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+              <button type="button" aria-pressed={tab === 'send'} onClick={() => setTab('send')} className={cn('inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition', tab === 'send' ? 'bg-white text-brand-text shadow-sm' : 'text-ink-3 hover:text-ink-2')}>
+                <Send className="h-3.5 w-3.5" /> Yuborish
+              </button>
+              <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')} className={cn('inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition', tab === 'history' ? 'bg-white text-brand-text shadow-sm' : 'text-ink-3 hover:text-ink-2')}>
+                <Bell className="h-3.5 w-3.5" /> Tarix
+                <span className={cn('rounded-full px-1.5 text-[10.5px] tabular', tab === 'history' ? 'bg-brand-soft text-brand-text' : 'bg-white/70 text-ink-3')}>{notifications.length}</span>
+              </button>
+              <button type="button" aria-pressed={tab === 'automations'} onClick={() => setTab('automations')} className={cn('inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition', tab === 'automations' ? 'bg-white text-brand-text shadow-sm' : 'text-ink-3 hover:text-ink-2')}>
+                <Zap className="h-3.5 w-3.5" /> Avtomatik
+              </button>
+            </div>
+            {tab === 'automations' ? (
+              <Button size="sm" onClick={() => openAutomation()}>
+                <Plus className="h-4 w-4" /> Qoida
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -278,6 +452,16 @@ export default function NotificationsPage() {
             <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[1fr_300px]">
               <div className="min-h-0 space-y-3 overflow-y-auto overscroll-contain pb-1 [contain:paint]">
                 <MobilePreview type={type} title={title} body={body} link={link} />
+
+                {editingId ? (
+                  <div className="card flex flex-wrap items-center gap-2 border-brand/40 bg-brand-soft/40 p-3">
+                    <PencilLine className="h-4 w-4 text-brand" />
+                    <span className="text-[12.5px] font-semibold text-ink">Rejalashtirilgan xabar tahrirlanmoqda</span>
+                    <Button size="sm" variant="ghost" className="ml-auto" onClick={resetForm}>
+                      Bekor qilish
+                    </Button>
+                  </div>
+                ) : null}
 
                 <section className="card p-4">
                   <h3 className="h4 text-ink">Qabul qiluvchilar</h3>
@@ -318,8 +502,8 @@ export default function NotificationsPage() {
                           <option value="blocked">Bloklangan</option>
                         </Select>
                       </Field>
-                      <Field label="Viloyat">
-                        <Select aria-label="Viloyat filtri" value={customRegion} onChange={(event) => setCustomRegion(event.target.value)} className="w-full">
+                      <Field label="Tuman">
+                        <Select aria-label="Tuman filtri" value={customRegion} onChange={(event) => setCustomRegion(event.target.value)} className="w-full">
                           <option value="all">Barchasi</option>
                           {REGION_NAMES.map((region) => <option key={region} value={region}>{region}</option>)}
                         </Select>
@@ -418,8 +602,92 @@ export default function NotificationsPage() {
               <Badge tone={TYPE_TONE[type]}>{TYPE_LABEL[type]}</Badge>
               <span className="hidden text-[12px] text-ink-3 sm:inline">{schedule === 'now' ? 'Hozir' : dateTime(scheduledAt)}</span>
               <Button aria-label="Bildirishnomani yuborish" onClick={submit} className="ml-auto">
-                <Send className="h-4 w-4" /> {schedule === 'later' ? 'Rejalashtirish' : 'Yuborish'}
+                <Send className="h-4 w-4" /> {editingId ? 'Rejani saqlash' : schedule === 'later' ? 'Rejalashtirish' : 'Yuborish'}
               </Button>
+            </div>
+          </>
+        ) : tab === 'automations' ? (
+          <>
+            <div className="grid shrink-0 grid-cols-3 divide-x divide-line-2 overflow-hidden rounded-[14px] border border-line bg-white shadow-card">
+              {[
+                { label: 'Faol qoidalar', value: `${enabledCount}/${automations.length}`, foot: 'Yoqilgan avtomatik qoidalar' },
+                { label: 'Yuborilgan', value: number(totalAutomated), foot: 'Barcha avtomatik xabarlar' },
+                { label: 'Oxirgi ishga tushish', value: lastAutomationAt ? relative(lastAutomationAt) : '—', foot: 'Eng so‘nggi avtomatik yuborish' },
+              ].map((cell) => (
+                <div key={cell.label} className="min-w-0 px-2.5 py-2 sm:px-4 sm:py-2.5">
+                  <p className="truncate text-[11px] font-medium text-ink-3 sm:text-xs">{cell.label}</p>
+                  <p className="mt-1 truncate font-display text-[19px] leading-none text-ink tabular sm:text-[22px]">{cell.value}</p>
+                  <p className="mt-1 hidden truncate text-[11px] text-ink-3 sm:block">{cell.foot}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [contain:paint]">
+              {automations.length === 0 ? (
+                <div className="card">
+                  <EmptyState
+                    icon={<Zap className="h-6 w-6" />}
+                    title="Avtomatik qoida yo‘q"
+                    text="Ro‘yxatdan o‘tish, obuna tugashi yoki nofaollik kabi hodisalarga avtomatik xabar sozlang."
+                    action={<Button onClick={() => openAutomation()}><Plus className="h-4 w-4" /> Qoida qo‘shish</Button>}
+                  />
+                </div>
+              ) : (
+                <ul className="space-y-2 pb-1">
+                  {automations.map((rule) => (
+                    <li key={rule.id} data-automation-row className="card flex flex-col gap-2.5 p-3 sm:flex-row sm:items-center sm:gap-3">
+                      <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', rule.enabled ? 'bg-brand-soft text-brand' : 'bg-muted text-ink-3')}>
+                        <Zap className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="truncate text-[13px] font-semibold text-ink">{rule.name}</p>
+                          <Badge tone={TRIGGERS[rule.trigger].tone}>{TRIGGERS[rule.trigger].label}</Badge>
+                          <Badge tone="gray">{rule.delayHours > 0 ? `${rule.delayHours} soat` : 'Darhol'}</Badge>
+                          {!rule.enabled ? <Badge tone="gray">O‘chirilgan</Badge> : null}
+                        </div>
+                        <p className="mt-0.5 line-clamp-1 text-[11.5px] text-ink-3">{rule.title} — {rule.body}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-ink-3">
+                          <span>{AUDIENCE_LABEL[rule.audience]}</span>
+                          <span>{TYPE_LABEL[rule.type]}</span>
+                          <span>Yuborilgan: <span className="font-semibold text-ink tabular">{number(rule.sent)}</span></span>
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {rule.lastRunAt ? `Oxirgi: ${relative(rule.lastRunAt)}` : 'Hali ishlamagan'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <Switch
+                          checked={rule.enabled}
+                          onChange={() => {
+                            toggleAutomation(rule.id)
+                            toast({ title: rule.enabled ? 'Qoida o‘chirildi' : 'Qoida yoqildi', description: rule.name, tone: 'success' })
+                          }}
+                          label={`${rule.name} faolligi`}
+                          size="sm"
+                        />
+                        <IconButton label={`${rule.name} ni hozir ishga tushirish`} onClick={() => runNow(rule)} disabled={!rule.enabled}>
+                          <Play className="h-4 w-4 text-success" />
+                        </IconButton>
+                        <IconButton label={`${rule.name} ni tahrirlash`} onClick={() => openAutomation(rule)}>
+                          <PencilLine className="h-4 w-4 text-ink-3" />
+                        </IconButton>
+                        <IconButton label={`${rule.name} ni o‘chirish`} onClick={() => setAutomationDelete(rule)}>
+                          <Trash2 className="h-4 w-4 text-error" />
+                        </IconButton>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-3">
+              <span><span className="font-semibold text-ink">{automations.length}</span> ta qoida</span>
+              <span>·</span>
+              <span>{enabledCount} ta faol</span>
+              <span className="ml-auto inline-flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-brand" /> Hodisalar bo‘yicha avtomatik yuborish</span>
             </div>
           </>
         ) : (
@@ -464,7 +732,11 @@ export default function NotificationsPage() {
                         </div>
                         <p className="mt-0.5 line-clamp-1 text-[12px] text-ink-3">{record.body}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] text-ink-3">
-                          <span>{dateTime(record.sentAt)}</span>
+                          <span>
+                            {record.scheduled && record.scheduledAt
+                              ? `${dateTime(record.scheduledAt)} ga rejalashtirilgan`
+                              : dateTime(record.sentAt)}
+                          </span>
                           <Badge tone="gray">{AUDIENCE_LABEL[record.audience]}</Badge>
                           <Badge tone={TYPE_TONE[record.type]}>{TYPE_LABEL[record.type]}</Badge>
                         </div>
@@ -479,6 +751,11 @@ export default function NotificationsPage() {
                           <p className="mt-1 text-[11px] text-ink-3 tabular">{number(record.read)} / {number(record.recipients)}</p>
                         </div>
                         <div className="flex items-center gap-0.5">
+                          {record.scheduled ? (
+                            <IconButton label={`${record.title} rejasini tahrirlash`} onClick={() => startEdit(record)}>
+                              <PencilLine className="h-4 w-4 text-ink-3" />
+                            </IconButton>
+                          ) : null}
                           <IconButton label={`${record.title} bildirishnomasini o‘chirish`} onClick={() => setDeleteTarget(record)}>
                             <Trash2 className="h-4 w-4 text-error" />
                           </IconButton>
@@ -502,12 +779,23 @@ export default function NotificationsPage() {
         open={detail !== null}
         onClose={() => setDetailId(null)}
         title={detail?.title ?? 'Bildirishnoma'}
-        description={detail ? dateTime(detail.sentAt) : undefined}
+        description={
+          detail
+            ? detail.scheduled && detail.scheduledAt
+              ? `${dateTime(detail.scheduledAt)} ga rejalashtirilgan`
+              : dateTime(detail.sentAt)
+            : undefined
+        }
         size="lg"
         footer={
           detail ? (
             <>
               <Button variant="ghost" onClick={() => setDetailId(null)} className="mr-auto">Yopish</Button>
+              {detail.scheduled ? (
+                <Button variant="secondary" size="sm" onClick={() => startEdit(detail)}>
+                  <PencilLine className="h-4 w-4" /> Tahrirlash
+                </Button>
+              ) : null}
               <IconButton label="Bildirishnomani o‘chirish" onClick={() => setDeleteTarget(detail)} className="text-error">
                 <Trash2 className="h-4 w-4" />
               </IconButton>
@@ -571,6 +859,133 @@ export default function NotificationsPage() {
         }
       >
         <p className="text-[13px] text-ink-2">Tarixdan <b>{deleteTarget?.title}</b> yozuvi o‘chiriladi. Foydalanuvchilar allaqachon olgan xabarlarga ta’sir qilmaydi.</p>
+      </Modal>
+
+      <Modal
+        open={automationModalOpen}
+        onClose={() => setAutomationModalOpen(false)}
+        title={automationDraft.id ? 'Qoidani tahrirlash' : 'Avtomatik qoida'}
+        description={TRIGGERS[automationDraft.trigger].hint}
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAutomationModalOpen(false)}>Bekor qilish</Button>
+            <Button onClick={saveAutomation}>
+              <Check className="h-4 w-4" /> {automationDraft.id ? 'Saqlash' : 'Qo‘shish'}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Qoida nomi" required className="sm:col-span-2">
+            <Input
+              aria-label="Qoida nomi"
+              value={automationDraft.name}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, name: event.target.value }))}
+              placeholder="Masalan: Obuna tugash eslatmasi"
+            />
+          </Field>
+          <Field label="Hodisa">
+            <Select
+              aria-label="Hodisa"
+              value={automationDraft.trigger}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, trigger: event.target.value as AutomationTrigger }))}
+              className="w-full"
+            >
+              {(Object.keys(TRIGGERS) as AutomationTrigger[]).map((trigger) => (
+                <option key={trigger} value={trigger}>{TRIGGERS[trigger].label}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Kechikish (soat)">
+            <Input
+              type="number"
+              min={0}
+              max={720}
+              aria-label="Kechikish soati"
+              value={automationDraft.delayHours}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, delayHours: Number(event.target.value) }))}
+            />
+          </Field>
+          <Field label="Auditoriya">
+            <Select
+              aria-label="Auditoriya"
+              value={automationDraft.audience}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, audience: event.target.value as NotificationAudience }))}
+              className="w-full"
+            >
+              {(Object.keys(AUDIENCE_FULL) as NotificationAudience[]).map((value) => (
+                <option key={value} value={value}>{AUDIENCE_FULL[value]}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Kanal">
+            <Select
+              aria-label="Kanal"
+              value={automationDraft.type}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, type: event.target.value as NotificationType }))}
+              className="w-full"
+            >
+              {(Object.keys(TYPE_LABEL) as NotificationType[]).map((value) => (
+                <option key={value} value={value}>{TYPE_LABEL[value]}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Xabar sarlavhasi" required className="sm:col-span-2">
+            <Input
+              aria-label="Xabar sarlavhasi"
+              value={automationDraft.title}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, title: event.target.value.slice(0, 50) }))}
+              maxLength={50}
+              placeholder="Masalan: Pro obunangiz tugamoqda"
+            />
+          </Field>
+          <Field label="Xabar matni" required className="sm:col-span-2">
+            <Textarea
+              aria-label="Xabar matni"
+              value={automationDraft.body}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, body: event.target.value.slice(0, 200) }))}
+              rows={3}
+              maxLength={200}
+              placeholder="Avtomatik yuboriladigan xabar matni"
+            />
+          </Field>
+          <Field label="Havola (ixtiyoriy)" className="sm:col-span-2">
+            <Input
+              aria-label="Xabar havolasi"
+              value={automationDraft.link}
+              onChange={(event) => setAutomationDraft((draft) => ({ ...draft, link: event.target.value }))}
+              placeholder="https://hdp.uz/subscription"
+            />
+          </Field>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line-2 px-3.5 py-2.5 sm:col-span-2">
+            <div>
+              <p className="text-[12.5px] font-semibold text-ink">Qoida faol</p>
+              <p className="text-[11px] text-ink-3">O‘chirilgan qoida avtomatik ishlamaydi.</p>
+            </div>
+            <Switch
+              checked={automationDraft.enabled}
+              onChange={(checked) => setAutomationDraft((draft) => ({ ...draft, enabled: checked }))}
+              label="Qoida faolligi"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={automationDelete !== null}
+        onClose={() => setAutomationDelete(null)}
+        title="Qoidani o‘chirish"
+        description={automationDelete?.name}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAutomationDelete(null)}>Bekor qilish</Button>
+            <Button variant="destructive" onClick={removeAutomation}><Trash2 className="h-4 w-4" /> O‘chirish</Button>
+          </>
+        }
+      >
+        <p className="text-[13px] text-ink-2"><b>{automationDelete?.name}</b> qoidasi o‘chiriladi. Allaqachon yuborilgan xabarlar tarixda qoladi.</p>
       </Modal>
     </PageTransition>
   )
