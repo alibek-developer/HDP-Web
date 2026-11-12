@@ -113,7 +113,13 @@ export function RevenueChart({ data }: { data: Array<{ label: string; value: num
   )
 }
 
-export function ActiveChart({ data }: { data: Array<{ label: string; value: number }> }) {
+export function ActiveChart({
+  data,
+  tooltipLabel = 'Faol',
+}: {
+  data: Array<{ label: string; value: number }>
+  tooltipLabel?: string
+}) {
   return (
     <div className="h-[200px] w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -132,7 +138,7 @@ export function ActiveChart({ data }: { data: Array<{ label: string; value: numb
               active && payload?.length ? (
                 <TooltipShell>
                   <p className="font-semibold text-ink">{label}</p>
-                  <p className="text-ink-3">Faol: {number(payload[0]?.value ?? 0)}</p>
+                  <p className="text-ink-3">{tooltipLabel}: {number(payload[0]?.value ?? 0)}</p>
                 </TooltipShell>
               ) : null
             }

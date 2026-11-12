@@ -84,6 +84,16 @@ export interface Video {
   createdAt: string
 }
 
+export interface LessonExample {
+  id: string
+  topicId: string
+  title: string
+  prompt: string
+  solution: string
+  answer: string
+  level: 'easy' | 'medium' | 'hard'
+}
+
 export interface Test {
   id: string
   question: string

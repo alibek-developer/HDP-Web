@@ -7,6 +7,7 @@ import type {
   CertTemplate,
   Certificate,
   LogEntry,
+  LessonExample,
   NotificationAutomation,
   NotificationRecord,
   Olympiad,
@@ -370,9 +371,9 @@ const testQuestion = (topicName: string, index: number) => {
 }
 
 export const tests: Test[] = topics.flatMap((topic, topicIndex) =>
-  Array.from({ length: 5 }, (_, index) => {
-    const built = testQuestion(topic.name, topicIndex * 5 + index)
-    const difficulty = index === 4 ? (topicIndex % 3 === 0 ? 'olympiad' : 'hard') : index < 2 ? 'easy' : 'medium'
+  Array.from({ length: 10 }, (_, index) => {
+    const built = testQuestion(topic.name, topicIndex * 10 + index)
+    const difficulty = index === 9 ? (topicIndex % 3 === 0 ? 'olympiad' : 'hard') : index < 3 ? 'easy' : index < 7 ? 'medium' : 'hard'
     const letters: Array<'a' | 'b' | 'c' | 'd'> = ['a', 'b', 'c', 'd']
     return {
       id: `test-${topicIndex + 1}-${index + 1}`,
@@ -385,9 +386,58 @@ export const tests: Test[] = topics.flatMap((topic, topicIndex) =>
       used: randInt(12, 480),
       errorRate: randInt(14, 68),
       topWrong: letters.filter((letter) => letter !== built.correct)[randInt(0, 2)],
-      note: index === 4 ? "Manba: olimpiada to'plami" : '',
+      note: index === 9 ? "Manba: olimpiada to'plami" : '',
       createdAt: iso(NOW - (110 - topicIndex) * DAY),
     } satisfies Test
+  }),
+)
+
+export const lessonExamples: LessonExample[] = topics.flatMap((topic, topicIndex) =>
+  Array.from({ length: 4 }, (_, index) => {
+    const a = 2 + ((topicIndex + index) % 7)
+    const x = 3 + ((topicIndex * 2 + index) % 9)
+    const b = 1 + ((topicIndex + index) % 5)
+    const total = a * x + b
+    const price = 60 + ((topicIndex + index) % 5) * 20
+    const discount = [10, 20, 25][index % 3]
+    const save = (price * discount) / 100
+    const w = 4 + ((topicIndex + index) % 5)
+    const h = 3 + ((topicIndex + index) % 4)
+    const set = [
+      {
+        title: 'Tenglamani yeching',
+        prompt: `${a}x + ${b} = ${total}`,
+        solution: `${a}x = ${total} − ${b} = ${total - b}\nx = ${total - b} : ${a} = ${x}`,
+        answer: `x = ${x}`,
+        level: 'easy' as const,
+      },
+      {
+        title: 'Chegirma hisobi',
+        prompt: `${price} ming so'mlik tovar ${discount}% chegirma bilan sotilmoqda. Yangi narx qancha?`,
+        solution: `Chegirma = ${price} × ${discount}% = ${save} ming\nYangi narx = ${price} − ${save} = ${price - save} ming`,
+        answer: `${price - save} ming so'm`,
+        level: 'easy' as const,
+      },
+      {
+        title: 'Ifodaning qiymati',
+        prompt: `${a}² + ${b}² ni hisoblang.`,
+        solution: `${a}² = ${a * a}, ${b}² = ${b * b}\n${a * a} + ${b * b} = ${a * a + b * b}`,
+        answer: `${a * a + b * b}`,
+        level: 'medium' as const,
+      },
+      {
+        title: "To'g'ri to'rtburchak",
+        prompt: `Tomlari ${w} sm va ${h} sm bo'lgan to'g'ri to'rtburchakning perimetri va yuzini toping.`,
+        solution: `P = 2 × (${w} + ${h}) = ${2 * (w + h)} sm\nS = ${w} × ${h} = ${w * h} sm²`,
+        answer: `P = ${2 * (w + h)} sm, S = ${w * h} sm²`,
+        level: 'medium' as const,
+      },
+    ]
+    return {
+      id: `example-${topicIndex + 1}-${index + 1}`,
+      topicId: topic.id,
+      ...set[index],
+    } satisfies LessonExample
   }),
 )
 

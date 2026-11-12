@@ -1,62 +1,25 @@
 'use client'
 
-import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '../ui'
-
-export interface Crumb {
-  label: string
-  href?: string
-}
-
-export function Breadcrumbs({ items, className }: { items: Crumb[]; className?: string }) {
-  return (
-    <nav aria-label="Breadcrumb" className={cn('mb-4 flex flex-wrap items-center gap-1.5 text-[12px]', className)}>
-      {items.map((item, index) => (
-        <span key={`${item.label}-${index}`} className="flex items-center gap-1.5">
-          {index > 0 ? <ChevronRight className="h-3 w-3 text-placeholder" /> : null}
-          {item.href && index < items.length - 1 ? (
-            <Link href={item.href} className="font-medium text-ink-3 transition hover:text-brand-text">
-              {item.label}
-            </Link>
-          ) : (
-            <span className={index === items.length - 1 ? 'font-semibold text-ink-2' : 'text-ink-3'}>{item.label}</span>
-          )}
-        </span>
-      ))}
-    </nav>
-  )
-}
 
 export function PageHeader({
   title,
   subtitle,
   actions,
-  breadcrumbs,
-  children,
 }: {
   title: ReactNode
   subtitle?: ReactNode
   actions?: ReactNode
-  breadcrumbs?: Crumb[]
-  children?: ReactNode
 }) {
   return (
-    <div className="mb-5">
-      {breadcrumbs ? <Breadcrumbs items={breadcrumbs} /> : null}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-ink sm:text-[28px]">
-            {title}
-          </h1>
-          {subtitle ? <div className="mt-1.5 text-[13px] text-ink-3">{subtitle}</div> : null}
-        </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+    <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <h1 className="h2 truncate text-ink">{title}</h1>
+        {subtitle ? <span className="truncate text-[12px] text-ink-3">{subtitle}</span> : null}
       </div>
-      {children}
-    </div>
+      {actions ? <div className="flex flex-wrap items-center gap-1.5">{actions}</div> : null}
+    </header>
   )
 }
 

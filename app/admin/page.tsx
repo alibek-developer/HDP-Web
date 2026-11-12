@@ -299,7 +299,7 @@ export default function DashboardPage() {
         </header>
 
         <div className="mt-3 grid min-h-0 flex-1 grid-cols-12 gap-3 overflow-y-auto overscroll-contain pb-1 pr-1 sm:gap-4">
-          <Reveal className="relative col-span-12 overflow-hidden rounded-[22px] bg-ink p-5 text-white sm:p-6 lg:col-span-5">
+          <Reveal className="relative col-span-12 rounded-[22px] bg-ink p-5 text-white sm:p-6 lg:col-span-5">
             <div className="flex items-start justify-between gap-3">
               <Eyebrow className="text-white/45">Jami o'quvchilar</Eyebrow>
               <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 font-geist text-[11px] font-bold tabular text-white/85 ring-1 ring-white/10">
@@ -505,7 +505,7 @@ export default function DashboardPage() {
                   Eng ko'p o'qilgan
                 </h2>
               </div>
-              <AllLink href="/admin/content/topics" />
+              <AllLink href="/admin/content" />
             </div>
             <ul className="mt-2">
               {topTopics.map((topic, index) => (

@@ -28,14 +28,7 @@ export default function UserDetailPage() {
   if (!user) {
     return (
       <PageTransition>
-        <PageHeader
-          title="Foydalanuvchi topilmadi"
-          breadcrumbs={[
-            { label: 'Dashboard', href: '/admin' },
-            { label: 'Foydalanuvchilar', href: '/admin/users' },
-            { label: decodedId },
-          ]}
-        />
+        <PageHeader title="Foydalanuvchi topilmadi" subtitle={`#${decodedId}`} />
         <Card>
           <EmptyState
             title="Bunday foydalanuvchi yo'q"
@@ -69,11 +62,6 @@ export default function UserDetailPage() {
       <PageHeader
         title={user.name}
         subtitle={`#${user.id} · @${user.username}`}
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/admin' },
-          { label: 'Foydalanuvchilar', href: '/admin/users' },
-          { label: user.name },
-        ]}
         actions={
           <>
             <Link href="/admin/users">

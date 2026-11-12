@@ -9,6 +9,7 @@ import type {
   CertTemplate,
   CertType,
   Certificate,
+  LessonExample,
   LogEntry,
   NotificationAutomation,
   NotificationRecord,
@@ -46,6 +47,7 @@ type Snapshot = Pick<
   | 'topics'
   | 'videos'
   | 'tests'
+  | 'lessonExamples'
   | 'olympiads'
   | 'transactions'
   | 'products'
@@ -83,6 +85,7 @@ interface AppStore {
   topics: Topic[]
   videos: Video[]
   tests: Test[]
+  lessonExamples: LessonExample[]
   olympiads: Olympiad[]
   transactions: Transaction[]
   products: Product[]
@@ -179,6 +182,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   topics: seed.topics,
   videos: seed.videos,
   tests: seed.tests,
+  lessonExamples: seed.lessonExamples,
   olympiads: seed.olympiads,
   transactions: seed.transactions,
   products: seed.products,
@@ -291,6 +295,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         topics: state.topics.filter((topic) => topic.subjectId !== id),
         videos: state.videos.filter((video) => !topicIds.has(video.topicId)),
         tests: state.tests.filter((test) => !topicIds.has(test.topicId)),
+        lessonExamples: state.lessonExamples.filter((example) => !topicIds.has(example.topicId)),
         olympiads: withoutTestIds(state.olympiads, removedTests),
       }
     }),
@@ -311,6 +316,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         topics: state.topics.filter((topic) => topic.id !== id),
         videos: state.videos.filter((video) => video.topicId !== id),
         tests: state.tests.filter((test) => test.topicId !== id),
+        lessonExamples: state.lessonExamples.filter((example) => example.topicId !== id),
         olympiads: withoutTestIds(state.olympiads, removedTests),
       }
     }),
@@ -666,6 +672,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       topics: state.topics,
       videos: state.videos,
       tests: state.tests,
+      lessonExamples: state.lessonExamples,
       olympiads: state.olympiads,
       transactions: state.transactions,
       products: state.products,

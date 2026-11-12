@@ -17,7 +17,6 @@ import {
   Minus,
   Percent,
   Target,
-  TrendingDown,
   Users,
   Wallet,
   type LucideIcon,
@@ -37,14 +36,12 @@ import {
   useToast,
 } from '@/components/ui'
 import {
+  ActiveChart,
   DistributionBarChart,
   DonutChart,
   FunnelChart,
-  Heatmap,
-  NewVsTotalChart,
   RankingBars,
   RevenueChart,
-  Sparkline,
 } from '@/components/charts'
 import { KhorezmDistricts } from '@/components/analytics/KhorezmDistricts'
 import { useAppStore } from '@/lib/store'
@@ -87,7 +84,6 @@ const METHOD_LABEL: Record<string, string> = {
 }
 
 const COHORT_ROWS = Array.from({ length: 8 }, (_, index) => `Hafta ${index + 1}`)
-const COHORT_COLS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']
 
 function KpiCard({
   icon: Icon,
@@ -223,7 +219,20 @@ export default function AnalyticsPage() {
     })
   }, [users, period, custom])
 
-  const newUserSpark = useMemo(() => activity.map((point) => point.newUsers), [activity])
+  const newInPeriod = useMemo(
+    () => activity.reduce((sum, point) => sum + point.newUsers, 0),
+    [activity],
+  )
+
+  const retentionByWeek = useMemo(
+    () =>
+      COHORT_ROWS.map((label, rowIndex) => {
+        const row = cohortMatrix[rowIndex] ?? []
+        const average = row.length ? row.reduce((sum, value) => sum + value, 0) / row.length : 0
+        return { label, value: average }
+      }),
+    [],
+  )
 
   const journey = [
     { label: 'Kirdi', value: totalUsers },
@@ -491,19 +500,13 @@ export default function AnalyticsPage() {
                       ]}
                     />
                   </div>
-                  <div className="hidden w-28 shrink-0 md:order-3 md:block">
-                    <Sparkline data={newUserSpark} color="#e8522a" height={30} />
-                    <p className="mt-0.5 text-center text-[9px] font-bold uppercase tracking-[0.08em] text-ink-3">
-                      Yangi trend
-                    </p>
-                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
                   <KpiCard
                     icon={Flame}
                     iconClass="bg-error-bg text-error"
-                    label="DAU (kunlik faol)"
+                    label="Bugun faol"
                     foot={
                       <Delta tone={engagement.dau >= engagement.yesterday ? 'up' : 'down'}>
                         {engagement.dau >= engagement.yesterday ? '+' : '−'}
@@ -516,7 +519,7 @@ export default function AnalyticsPage() {
                   <KpiCard
                     icon={Users}
                     iconClass="bg-brand-soft text-brand"
-                    label="MAU (oylik faol)"
+                    label="30 kunda faol"
                     foot={<span className="text-[10.5px] font-semibold text-ink-3">Oxirgi 30 kunda kirganlar</span>}
                   >
                     <CountUp value={engagement.mau} format={number} />
@@ -524,8 +527,8 @@ export default function AnalyticsPage() {
                   <KpiCard
                     icon={Target}
                     iconClass="bg-info-bg text-info"
-                    label="Retention (7 kun)"
-                    foot={<span className="text-[10.5px] font-semibold text-ink-3">Kogorta bo'yicha qaytish</span>}
+                    label="7-kun qaytish"
+                    foot={<span className="text-[10.5px] font-semibold text-ink-3">Ro'yxatdan o'tgach qaytganlar</span>}
                   >
                     <CountUp value={engagement.retention} suffix="%" />
                   </KpiCard>
@@ -540,45 +543,54 @@ export default function AnalyticsPage() {
                       <span className="text-[13px] font-bold text-ink-3">daq</span>
                     </span>
                   </KpiCard>
-                  <KpiCard
-                    icon={TrendingDown}
-                    iconClass="bg-warning-bg text-warning"
-                    label="Churn rate"
-                    foot={
-                      <span className="text-[10.5px] font-semibold text-ink-3">
-                        30 kunda kirmaganlar ulushi
-                      </span>
-                    }
-                  >
-                    <CountUp value={engagement.churn} format={(value) => percent(value, 1)} />
-                  </KpiCard>
                 </div>
 
                 <SectionCard
-                  title="Foydalanuvchilar o'sishi"
-                  subtitle="Kunlik yangi ro'yxatdan o'tishlar va jami foydalanuvchilar"
+                  title="Yangi foydalanuvchilar"
+                  subtitle="Tanlangan davrda ro'yxatdan o'tganlar"
                   action={
-                    <div className="flex items-center gap-3 text-[11px] font-medium text-ink-3">
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-[#2563eb]" /> Yangi
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-brand" /> Jami
-                      </span>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-ink-3">
+                      <Badge tone="brand" dot>
+                        +{number(newInPeriod)} yangi
+                      </Badge>
+                      <Badge tone="gray">Churn {percent(engagement.churn, 1)}</Badge>
                     </div>
                   }
                 >
-                  <NewVsTotalChart data={activity} />
+                  <ActiveChart
+                    data={activity.map((point) => ({ label: point.label, value: point.newUsers }))}
+                    tooltipLabel="Yangi"
+                  />
                 </SectionCard>
 
                 <div className="grid gap-2.5 sm:gap-3.5 xl:grid-cols-5">
                   <SectionCard
                     className="xl:col-span-3"
-                    title="Retention cohort"
-                    subtitle="Ro'yxatdan o'tgan hafta bo'yicha 7-kunlik qaytish (%)"
+                    title="Hafta bo'yicha qaytish"
+                    subtitle="Har hafta ro'yxatdan o'tganlarning 7 kun ichida qaytish foizi"
                     action={<Badge tone="success" dot>{percent(engagement.retention, 0)} o'rtacha</Badge>}
                   >
-                    <Heatmap matrix={cohortMatrix} rows={COHORT_ROWS} cols={COHORT_COLS} />
+                    <ul className="space-y-2">
+                      {retentionByWeek.map((row, index) => (
+                        <li key={row.label} className="flex items-center gap-2.5">
+                          <span className="w-14 shrink-0 font-geist text-[11px] font-medium text-ink-3">
+                            {row.label}
+                          </span>
+                          <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                            <span
+                              className={cn(
+                                'block h-full rounded-full transition-[width] duration-300',
+                                index === retentionByWeek.length - 1 ? 'bg-brand' : 'bg-brand/55',
+                              )}
+                              style={{ width: `${Math.min(100, row.value)}%` }}
+                            />
+                          </span>
+                          <span className="w-10 shrink-0 text-right font-geist text-[11.5px] font-bold tabular text-ink">
+                            {percent(row.value, 0)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </SectionCard>
 
                   <SectionCard

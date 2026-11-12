@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Layers, ListTree, PlaySquare, Sparkles } from 'lucide-react'
+import { Layers, PlaySquare, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '@/components/ui'
 import { useAppStore } from '@/lib/store'
@@ -13,7 +13,6 @@ export const contentRoot =
 
 const TABS = [
   { href: '/admin/content', label: 'Fanlar', icon: Layers, count: 'subjects' as const },
-  { href: '/admin/content/topics', label: 'Mavzular', icon: ListTree, count: 'topics' as const },
   { href: '/admin/content/videos', label: 'Videolar', icon: PlaySquare, count: 'videos' as const },
   { href: '/admin/content/import', label: 'PDF import', icon: Sparkles, count: null },
 ]

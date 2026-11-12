@@ -1,12 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Check,
   ChevronDown,
   Download,
   FileUp,
   PencilLine,
+  Play,
   Plus,
   Search,
   SlidersHorizontal,
@@ -77,6 +79,7 @@ const openTest = (initial?: Test, topicId?: string): Test => ({
 })
 
 export default function TestsPage() {
+  const router = useRouter()
   const tests = useAppStore((state) => state.tests)
   const topics = useAppStore((state) => state.topics)
   const subjects = useAppStore((state) => state.subjects)
@@ -365,6 +368,22 @@ export default function TestsPage() {
               <FileUp className="h-4 w-4" />
               <span className="hidden sm:inline">PDF import</span>
             </a>
+            <button
+              type="button"
+              onClick={() => {
+                const target = topicId !== 'all' ? topicId : topics[0]?.id
+                if (!target) {
+                  toast({ title: "Avval mavzu qo'shing", tone: 'error' })
+                  return
+                }
+                router.push(`/admin/tests/run?lesson=${target}`)
+              }}
+              aria-label="Test ishlash"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-2.5 font-geist text-[12.5px] font-semibold text-ink-2 transition hover:border-line-brand hover:text-ink sm:px-3"
+            >
+              <Play className="h-4 w-4" />
+              <span className="hidden sm:inline">Test ishlash</span>
+            </button>
             <button
               type="button"
               onClick={openNew}

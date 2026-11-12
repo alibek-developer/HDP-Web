@@ -41,7 +41,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Library,
     children: [
       { href: '/admin/content', label: 'Fanlar', labelRu: 'Предметы' },
-      { href: '/admin/content/topics', label: 'Mavzular', labelRu: 'Темы' },
       { href: '/admin/content/videos', label: 'Videolar', labelRu: 'Видео' },
       { href: '/admin/content/import', label: 'PDF Import', labelRu: 'PDF импорт' },
     ],
@@ -63,7 +62,6 @@ export const PAGE_TITLES: Record<string, string> = {
   '/admin': 'Dashboard',
   '/admin/users': 'Foydalanuvchilar',
   '/admin/content': 'Fanlar',
-  '/admin/content/topics': 'Mavzular',
   '/admin/content/videos': 'Videolar',
   '/admin/content/import': 'AI bilan PDF Import',
   '/admin/tests': 'Testlar',
@@ -82,6 +80,8 @@ export const PAGE_TITLES: Record<string, string> = {
 export const titleForPath = (pathname: string): string => {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname]
   if (pathname.startsWith('/admin/users/')) return 'Foydalanuvchi profili'
+  if (pathname.startsWith('/admin/content/lessons/')) return 'Dars'
+  if (pathname.startsWith('/admin/tests/run')) return 'Test ishlash'
   if (pathname.includes('/live')) return 'Jonli monitoring'
   if (pathname.includes('/results')) return 'Olimpiada natijalari'
   if (pathname.startsWith('/admin/olympiads/new')) return 'Yangi olimpiada'
